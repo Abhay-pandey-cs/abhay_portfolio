@@ -6,12 +6,12 @@ export async function GET() {
   try {
     const db = await getDatabase();
     if (!db) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+      return NextResponse.json([]);
     }
     const skills = await db.collection('skills').find({}).toArray();
     return NextResponse.json(skills);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch skills' }, { status: 500 });
+    return NextResponse.json([]);
   }
 }
 

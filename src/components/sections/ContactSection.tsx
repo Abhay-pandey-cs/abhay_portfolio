@@ -22,9 +22,11 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings }) => {
   const [copiedEmail, setCopiedEmail] = useState(false);
 
   const handleCopyEmail = () => {
-    navigator.clipboard.writeText(settings.email);
-    setCopiedEmail(true);
-    setTimeout(() => setCopiedEmail(false), 2000);
+    if (settings.email) {
+      navigator.clipboard.writeText(settings.email);
+      setCopiedEmail(true);
+      setTimeout(() => setCopiedEmail(false), 2000);
+    }
   };
 
   return (

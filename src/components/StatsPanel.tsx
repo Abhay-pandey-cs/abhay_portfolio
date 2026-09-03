@@ -21,9 +21,9 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
     setLoading(true);
     setError(null);
     try {
-      const githubUser = settings.github.replace('https://github.com/', '');
-      const leetcodeUser = settings.leetcode?.replace('https://leetcode.com/u/', '') || settings.leetcode;
-      const codechefUser = settings.codechef?.replace('https://www.codechef.com/users/', '') || settings.codechef;
+      const githubUser = settings.github?.replace('https://github.com/', '') || '';
+      const leetcodeUser = settings.leetcode?.replace('https://leetcode.com/u/', '') || settings.leetcode || '';
+      const codechefUser = settings.codechef?.replace('https://www.codechef.com/users/', '') || settings.codechef || '';
 
       const params = new URLSearchParams();
       if (githubUser) params.set('github', githubUser);

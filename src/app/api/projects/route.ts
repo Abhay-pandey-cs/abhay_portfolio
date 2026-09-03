@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
     const db = await getDatabase();
     if (!db) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+      return NextResponse.json([]);
     }
 
     let projects = await db.collection('projects').find({}).toArray();

@@ -9,10 +9,13 @@ import {
 } from './initialData';
 
 const uri = process.env.MONGODB_URI || '';
-const options = {};
-
-let client: MongoClient | null = null;
-let clientPromise: Promise<MongoClient> | null = null;
+const options: Record<string, any> = {
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 10000,
+  maxPoolSize: 5,
+  retryWrites: true,
+  w: 'majority',
+};
 
 if (uri) {
   if (process.env.NODE_ENV === 'development') {
