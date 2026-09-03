@@ -162,6 +162,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsInitialSync(false);
   }, []);
 
+  // Sync settings from parent when it reloads from server
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings(initialSettings);
+    }
+  }, [initialSettings]);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (passcode === 'abhay2026') {
