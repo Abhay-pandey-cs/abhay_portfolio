@@ -227,7 +227,7 @@ export const WhatsAppConnectAI: React.FC<WhatsAppConnectAIProps> = ({
             className="flex-1 bg-[#2a3942] text-[#e9edef] placeholder-[#8696a0] text-xs px-3 py-2 rounded-lg outline-none border border-transparent focus:border-[#00a884] transition-colors"
           />
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={!inputValue.trim() || isSending}
             className={`p-2 rounded-full transition-all ${
               inputValue.trim() && !isSending
