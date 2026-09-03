@@ -37,6 +37,7 @@ import {
 
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [isAdminMode, setIsAdminMode] = useState(false);
    const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
@@ -135,11 +136,14 @@ export default function Home() {
       setEducation(Array.isArray(education) ? education : []);
     } catch (e) {
       console.error('Failed to load data from API', e);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     setIsClient(true);
+    setLoading(true);
     refreshData();
   }, []);
 
@@ -174,7 +178,7 @@ export default function Home() {
      return () => window.removeEventListener('keydown', onKey);
    }, []);
 
-  if (!isClient) {
+  if (!isClient || loading) {
     return (
       <div className="min-h-screen bg-[#121316] flex items-center justify-center font-mono text-xs text-gray-400">
         <div className="flex items-center gap-2">
