@@ -24,9 +24,9 @@ export const DiscordBar: React.FC<DiscordBarProps> = ({
           <div className="relative">
             <ProfilePhoto
               src={settings.profilePhoto || undefined}
-              alt={settings.name}
+              alt={settings.name || 'User'}
               size={32}
-              initials={settings.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+              initials={(settings.name || '').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
             />
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#23a55a] border-2 border-[#1e1f22]" title="Online" />
           </div>
@@ -34,7 +34,7 @@ export const DiscordBar: React.FC<DiscordBarProps> = ({
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-gray-200">
-                {settings.name}
+                {settings.name || 'User'}
               </span>
               <span className="px-1.5 py-0.2 rounded bg-[#5865f2]/20 text-[#5865f2] font-mono text-[10px] font-semibold flex items-center gap-0.5">
                 <ShieldCheck className="w-3 h-3" />

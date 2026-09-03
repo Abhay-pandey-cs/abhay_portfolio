@@ -142,7 +142,7 @@ export const WhatsAppConnectAI: React.FC<WhatsAppConnectAIProps> = ({
               <MessageCircle className="w-3.5 h-3.5" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[11px] text-gray-200 font-medium">{settings.name.split(' ')[0]}'s AI Assistant</span>
+              <span className="text-[11px] text-gray-200 font-medium">{(settings.name || 'User').split(' ')[0]}'s AI Assistant</span>
               <span className="text-[10px] text-[#8696a0]">Portfolio-aware • Stats-enabled</span>
             </div>
           </div>

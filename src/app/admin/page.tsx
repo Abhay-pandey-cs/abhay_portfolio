@@ -23,7 +23,32 @@ export default function AdminPage() {
   const [learning, setLearning] = useState<LearningTopic[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [settings, setSettings] = useState<SiteSettings>({
+    name: '',
+    role: '',
+    subtitle: '',
+    bio: '',
+    currentStatus: '',
+    university: '',
+    degree: '',
+    year: '',
+    cgpa: '',
+    cgpaFirstSem: '',
+    cgpaSecondSem: '',
+    cgpaOverall: '',
+    email: '',
+    github: '',
+    linkedin: '',
+    leetcode: '',
+    codechef: '',
+    whatsappNumber: '',
+    resumeUrl: '',
+    githubStatsUsername: '',
+    splineSceneUrl: '',
+    footerQuote: '',
+    profilePhoto: '',
+    enablePhotoBooth: false
+  });
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [experience, setExperience] = useState<Experience[]>([]);
@@ -48,7 +73,32 @@ export default function AdminPage() {
       setLearning(Array.isArray(learning) ? learning : []);
       setNotes(Array.isArray(notes) ? notes : []);
       setSkills(Array.isArray(skills) ? skills : []);
-      setSettings(settings || null);
+      setSettings(settings || {
+        name: '',
+        role: '',
+        subtitle: '',
+        bio: '',
+        currentStatus: '',
+        university: '',
+        degree: '',
+        year: '',
+        cgpa: '',
+        cgpaFirstSem: '',
+        cgpaSecondSem: '',
+        cgpaOverall: '',
+        email: '',
+        github: '',
+        linkedin: '',
+        leetcode: '',
+        codechef: '',
+        whatsappNumber: '',
+        resumeUrl: '',
+        githubStatsUsername: '',
+        splineSceneUrl: '',
+        footerQuote: '',
+        profilePhoto: '',
+        enablePhotoBooth: false
+      });
       setCertifications(Array.isArray(certifications) ? certifications : []);
       setAchievements(Array.isArray(achievements) ? achievements : []);
       setExperience(Array.isArray(experience) ? experience : []);
@@ -62,8 +112,6 @@ export default function AdminPage() {
   useEffect(() => {
     loadData();
   }, []);
-
-  if (!settings) return null;
 
   return (
     <AdminPanel

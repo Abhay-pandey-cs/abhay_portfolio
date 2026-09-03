@@ -88,9 +88,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       </div>
         <ProfilePhoto
           src={settings.profilePhoto || undefined}
-          alt={settings.name}
+          alt={settings.name || 'User'}
           size={256}
-          initials={settings.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+          initials={(settings.name || '').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
           className="shrink-0"
         />
       </div>
