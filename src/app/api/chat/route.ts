@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildKnowledgeBase, retrieveRelevantData, retrieveExtendedRelevantData } from '@/lib/knowledgeBase';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { SiteSettings, Project, Note, Experience, LearningTopic, Achievement, Certification, EducationItem, Skill } from '@/types';
 
 export async function POST(request: Request) {
@@ -11,15 +11,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No message provided' }, { status: 400 });
     }
 
-    const settings: SiteSettings = projectContext?.settings || DataStore.getSettings();
-    const projects: Project[] = projectContext?.projects || DataStore.getProjects();
-    const notes: Note[] = projectContext?.notes || DataStore.getNotes();
-    const experience: Experience[] = projectContext?.experience || DataStore.getExperience();
-    const learning: LearningTopic[] = projectContext?.learning || DataStore.getLearningTopics();
-    const achievements: Achievement[] = projectContext?.achievements || DataStore.getAchievements();
-    const certifications: Certification[] = projectContext?.certifications || DataStore.getCertifications();
-    const education: EducationItem[] = projectContext?.education || DataStore.getEducation();
-    const skills: Skill[] = projectContext?.skills || DataStore.getSkills();
+    let settings: SiteSettings = projectContext?.settings || {
+      name: '',
+      role: '',
+      subtitle: '',
+      bio: '',
+      currentStatus: '',
+      university: '',
+      degree: '',
+      year: '',
+      cgpa: '',
+      cgpaFirstSem: '',
+      cgpaSecondSem: '',
+      cgpaOverall: '',
+      email: '',
+      github: '',
+      linkedin: '',
+      leetcode: '',
+      codechef: '',
+      whatsappNumber: '',
+      resumeUrl: '',
+      githubStatsUsername: '',
+      splineSceneUrl: '',
+      footerQuote: '',
+      profilePhoto: '',
+      enablePhotoBooth: false
+    };
+    let projects: Project[] = projectContext?.projects || [];
+    let notes: Note[] = projectContext?.notes || [];
+    let experience: Experience[] = projectContext?.experience || [];
+    let learning: LearningTopic[] = projectContext?.learning || [];
+    let achievements: Achievement[] = projectContext?.achievements || [];
+    let certifications: Certification[] = projectContext?.certifications || [];
+    let education: EducationItem[] = projectContext?.education || [];
+    let skills: Skill[] = projectContext?.skills || [];
+
+    const db = await getDatabase();
+    if (db) {
+      if (!projectContext?.settings) {
+        const settingsDoc = await db.collection('settings').findOne({ _id: 'site_settings' } as any);
+        if (settingsDoc) {
+          const { _id, ...rest } = settingsDoc as any;
+          settings = { ...settings, ...rest } as SiteSettings;
+        }
+      }
+      if (!projectContext?.projects) projects = (await db.collection('projects').find({}).toArray()) as unknown as Project[];
+      if (!projectContext?.notes) notes = (await db.collection('notes').find({}).toArray()) as unknown as Note[];
+      if (!projectContext?.experience) experience = (await db.collection('experience').find({}).toArray()) as unknown as Experience[];
+      if (!projectContext?.learning) learning = (await db.collection('learning').find({}).toArray()) as unknown as LearningTopic[];
+      if (!projectContext?.achievements) achievements = (await db.collection('achievements').find({}).toArray()) as unknown as Achievement[];
+      if (!projectContext?.certifications) certifications = (await db.collection('certifications').find({}).toArray()) as unknown as Certification[];
+      if (!projectContext?.education) education = (await db.collection('education').find({}).toArray()) as unknown as EducationItem[];
+      if (!projectContext?.skills) skills = (await db.collection('skills').find({}).toArray()) as unknown as Skill[];
+    }
 
     const knowledgeBase = buildKnowledgeBase({
       settings,

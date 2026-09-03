@@ -22,7 +22,6 @@ import { ContactSection } from '@/components/sections/ContactSection';
 import { CaseStudyModal } from '@/components/sections/CaseStudyModal';
 import { AdminPanel } from '@/components/admin/AdminPanel';
 import { WhatsAppConnectAI } from '@/components/WhatsAppConnectAI';
-import { DataStore } from '@/lib/storage';
 import { 
   Project, 
   LearningTopic, 
@@ -35,7 +34,6 @@ import {
    Experience,
    EducationItem
 } from '@/types';
-import { initialCommunityProjects } from '@/lib/initialData';
 
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
@@ -52,8 +50,8 @@ export default function Home() {
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [experience, setExperience] = useState<Experience[]>([]);
-  const [community, setCommunity] = useState<CommunityProject[]>(initialCommunityProjects);
-  const [education, setEducation] = useState<EducationItem[]>(DataStore.getEducation());
+  const [community, setCommunity] = useState<CommunityProject[]>([]);
+  const [education, setEducation] = useState<EducationItem[]>([]);
 
   // Modals
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<Project | null>(null);
@@ -61,17 +59,33 @@ export default function Home() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [pendingScroll, setPendingScroll] = useState<string | null>(null);
 
-  const refreshData = () => {
-    setProjects(DataStore.getProjects());
-    setLearning(DataStore.getLearningTopics());
-    setNotes(DataStore.getNotes());
-    setSkills(DataStore.getSkills());
-    setSettings(DataStore.getSettings());
-    setCertifications(DataStore.getCertifications());
-    setAchievements(DataStore.getAchievements());
-    setExperience(DataStore.getExperience());
-    setCommunity(DataStore.getCommunity());
-    setEducation(DataStore.getEducation());
+  const refreshData = async () => {
+    try {
+      const [projects, learning, notes, skills, settings, certifications, achievements, experience, community, education] = await Promise.all([
+        fetch('/api/projects').then(r => r.json()),
+        fetch('/api/learning').then(r => r.json()),
+        fetch('/api/notes').then(r => r.json()),
+        fetch('/api/skills').then(r => r.json()),
+        fetch('/api/settings').then(r => r.json()),
+        fetch('/api/certifications').then(r => r.json()),
+        fetch('/api/achievements').then(r => r.json()),
+        fetch('/api/experience').then(r => r.json()),
+        fetch('/api/community').then(r => r.json()),
+        fetch('/api/education').then(r => r.json()),
+      ]);
+      setProjects(Array.isArray(projects) ? projects : []);
+      setLearning(Array.isArray(learning) ? learning : []);
+      setNotes(Array.isArray(notes) ? notes : []);
+      setSkills(Array.isArray(skills) ? skills : []);
+      setSettings(settings || null);
+      setCertifications(Array.isArray(certifications) ? certifications : []);
+      setAchievements(Array.isArray(achievements) ? achievements : []);
+      setExperience(Array.isArray(experience) ? experience : []);
+      setCommunity(Array.isArray(community) ? community : []);
+      setEducation(Array.isArray(education) ? education : []);
+    } catch (e) {
+      console.error('Failed to load data from API', e);
+    }
   };
 
   useEffect(() => {

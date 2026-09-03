@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getDatabase } from '@/lib/mongodb';
 import { DataStore } from '@/lib/storage';
 
 async function safeFetch(url: string, init?: RequestInit): Promise<any> {
@@ -176,7 +177,16 @@ async function fetchCodeChefStats(username: string) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const settings = DataStore.getSettings();
+    
+    const db = await getDatabase();
+    let settings: any = {};
+    if (db) {
+      const settingsDoc = await db.collection('settings').findOne({ _id: 'site_settings' } as any);
+      if (settingsDoc) {
+        const { _id, ...rest } = settingsDoc as any;
+        settings = rest;
+      }
+    }
     
     const githubUsername = searchParams.get('github') || settings.githubStatsUsername || settings.github?.replace('https://github.com/', '') || '';
     const leetcodeUsername = searchParams.get('leetcode') || settings.leetcode?.replace('https://leetcode.com/u/', '').replace(/\/+$/, '') || '';
