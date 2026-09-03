@@ -1,50 +1,59 @@
 import { NextResponse } from 'next/server';
-import { buildKnowledgeBase, retrieveRelevantData } from '@/lib/knowledgeBase';
+import { buildKnowledgeBase, retrieveRelevantData, retrieveExtendedRelevantData } from '@/lib/knowledgeBase';
 import { DataStore } from '@/lib/storage';
+import { SiteSettings, Project, Note, Experience, LearningTopic, Achievement, Certification, EducationItem, Skill } from '@/types';
 
 export async function POST(request: Request) {
   try {
-    const { message, stats } = await request.json();
+    const { message, stats, projectContext } = await request.json();
 
     if (!message) {
       return NextResponse.json({ error: 'No message provided' }, { status: 400 });
     }
 
-    // Build knowledge base from current portfolio data
+    const settings: SiteSettings = projectContext?.settings || DataStore.getSettings();
+    const projects: Project[] = projectContext?.projects || DataStore.getProjects();
+    const notes: Note[] = projectContext?.notes || DataStore.getNotes();
+    const experience: Experience[] = projectContext?.experience || DataStore.getExperience();
+    const learning: LearningTopic[] = projectContext?.learning || DataStore.getLearningTopics();
+    const achievements: Achievement[] = projectContext?.achievements || DataStore.getAchievements();
+    const certifications: Certification[] = projectContext?.certifications || DataStore.getCertifications();
+    const education: EducationItem[] = projectContext?.education || DataStore.getEducation();
+    const skills: Skill[] = projectContext?.skills || DataStore.getSkills();
+
     const knowledgeBase = buildKnowledgeBase({
-      settings: DataStore.getSettings(),
-      projects: DataStore.getProjects(),
-      notes: DataStore.getNotes(),
-      experience: DataStore.getExperience(),
-      learning: DataStore.getLearningTopics(),
-      achievements: DataStore.getAchievements(),
-      certifications: DataStore.getCertifications(),
-      education: DataStore.getEducation(),
-      skills: DataStore.getSkills(),
+      settings,
+      projects,
+      notes,
+      experience,
+      learning,
+      achievements,
+      certifications,
+      education,
+      skills,
       stats
     });
 
-    // Retrieve relevant data based on the user's question
-    const relevantData = retrieveRelevantData(knowledgeBase, message);
+    const extended = retrieveExtendedRelevantData(knowledgeBase, message);
+    const targeted = retrieveRelevantData(knowledgeBase, message);
+    const full = extended || targeted;
 
-    // Check if we got specific relevant data (not the full knowledge base)
-    const { serializeKnowledgeBase } = await import('@/lib/knowledgeBase');
-    const isSpecificData = relevantData !== serializeKnowledgeBase(knowledgeBase);
+    const isSpecific = full !== retrieveRelevantData(knowledgeBase, '__full_fallback__') && full.trim().length > 0;
 
-    if (isSpecificData) {
+    if (isSpecific) {
       return NextResponse.json({
-        response: relevantData,
+        response: full,
         source: 'knowledge_base',
         dataVersion: knowledgeBase.dataVersion,
         lastUpdated: knowledgeBase.lastUpdated
       });
     }
 
-    // Return null response to trigger client-side fallback
     return NextResponse.json({
-      response: null,
-      source: 'fallback',
-      dataVersion: knowledgeBase.dataVersion
+      response: `I don't have that information in the current portfolio data. Try asking about projects, skills, education, experience, certifications, achievements, or coding profiles.`,
+      source: 'knowledge_base',
+      dataVersion: knowledgeBase.dataVersion,
+      lastUpdated: knowledgeBase.lastUpdated
     });
   } catch (error) {
     console.error('Chat API error:', error);

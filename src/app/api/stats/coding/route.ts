@@ -1,34 +1,36 @@
 import { NextResponse } from 'next/server';
+import { DataStore } from '@/lib/storage';
 
-// Fetch GitHub user stats
+async function safeFetch(url: string, init?: RequestInit): Promise<any> {
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function fetchGitHubStats(username: string) {
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
     };
-
-    // Use GitHub token if available for higher rate limits
     if (process.env.GITHUB_TOKEN) {
       headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
     }
 
-    // Fetch basic user info
-    const userRes = await fetch(`https://api.github.com/users/${username}`, { headers });
-    if (!userRes.ok) {
-      throw new Error(`GitHub API error: ${userRes.status}`);
+    const user = await safeFetch(`https://api.github.com/users/${username}`, { headers });
+    const repos = await safeFetch(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers });
+
+    if (!user || !user.login) {
+      return { username, available: false };
     }
-    const user = await userRes.json();
 
-    // Fetch user's repositories for language stats
-    const reposRes = await fetch(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers });
-    const repos = reposRes.ok ? await reposRes.json() : [];
-
-    // Calculate total stars, forks, and language distribution
     let totalStars = 0;
     let totalForks = 0;
     const languageCount: Record<string, number> = {};
-
-    repos.forEach((repo: any) => {
+    (Array.isArray(repos) ? repos : []).forEach((repo: any) => {
       totalStars += repo.stargazers_count || 0;
       totalForks += repo.forks_count || 0;
       if (repo.language) {
@@ -36,26 +38,16 @@ async function fetchGitHubStats(username: string) {
       }
     });
 
-    // Get top languages
     const topLanguages = Object.entries(languageCount)
       .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 5)
       .map(([lang, count]) => ({ language: lang, count }));
 
-    // Fetch contribution stats using the user's contribution calendar
-    // This requires a different approach - we'll use the user events API
-    const eventsRes = await fetch(`https://api.github.com/users/${username}/events/public?per_page=100`, { headers });
-    const events = eventsRes.ok ? await eventsRes.json() : [];
-
-    // Count recent commits (PushEvents)
+    const events = await safeFetch(`https://api.github.com/users/${username}/events/public?per_page=100`, { headers });
     let totalCommits = 0;
-    const dailyActivity: Record<string, number> = {};
-    events.forEach((event: any) => {
-      if (event.type === 'PushEvent' && event.payload.commits) {
-        const commitCount = event.payload.commits.length;
-        totalCommits += commitCount;
-        const date = event.created_at.split('T')[0];
-        dailyActivity[date] = (dailyActivity[date] || 0) + commitCount;
+    (Array.isArray(events) ? events : []).forEach((event: any) => {
+      if (event.type === 'PushEvent' && Array.isArray(event.payload?.commits)) {
+        totalCommits += event.payload.commits.length;
       }
     });
 
@@ -65,7 +57,7 @@ async function fetchGitHubStats(username: string) {
       bio: user.bio || '',
       avatarUrl: user.avatar_url,
       publicRepos: user.public_repos || 0,
-      followers: user.followers || 0,
+      followers: user.following || 0,
       following: user.following || 0,
       totalStars,
       totalForks,
@@ -73,14 +65,13 @@ async function fetchGitHubStats(username: string) {
       topLanguages,
       createdAt: user.created_at,
       updatedAt: new Date().toISOString(),
+      available: true
     };
-  } catch (error) {
-    console.error('GitHub stats fetch error:', error);
-    return { error: 'Failed to fetch GitHub stats', username };
+  } catch {
+    return { username, available: false };
   }
 }
 
-// Fetch LeetCode stats via GraphQL
 async function fetchLeetCodeStats(username: string) {
   try {
     const query = `
@@ -91,7 +82,6 @@ async function fetchLeetCodeStats(username: string) {
             realName
             ranking
             avatar
-            websites
           }
           submitStatsGlobal {
             acEasy
@@ -110,28 +100,20 @@ async function fetchLeetCodeStats(username: string) {
       }
     `;
 
-    const response = await fetch('https://leetcode.com/graphql', {
+    const response = await safeFetch('https://leetcode.com/graphql', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (portfolio-stats-fetcher)',
+        'User-Agent': 'Mozilla/5.0 (compatible; PortfolioStats/1.0; +https://example.com)',
       },
-      body: JSON.stringify({
-        query,
-        variables: { username },
-      }),
+      body: JSON.stringify({ query, variables: { username } }),
     });
 
-    if (!response.ok) {
-      throw new Error(`LeetCode API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const matchedUser = data.data?.matchedUser;
-    const contestRanking = data.data?.userContestRanking;
+    const matchedUser = response?.data?.matchedUser;
+    const contestRanking = response?.data?.userContestRanking;
 
     if (!matchedUser) {
-      return { error: 'LeetCode user not found', username };
+      return { username, available: false };
     }
 
     return {
@@ -149,28 +131,24 @@ async function fetchLeetCodeStats(username: string) {
       totalRanking: contestRanking?.totalRanking || 0,
       contestNum: contestRanking?.contestNum || 0,
       updatedAt: new Date().toISOString(),
+      available: true
     };
-  } catch (error) {
-    console.error('LeetCode stats fetch error:', error);
-    return { error: 'Failed to fetch LeetCode stats', username };
+  } catch {
+    return { username, available: false };
   }
 }
 
-// Fetch CodeChef stats
 async function fetchCodeChefStats(username: string) {
   try {
-    // Use the unofficial CodeChef API
-    const response = await fetch(`https://codechef-api.vercel.app/${username}`, {
+    const data = await safeFetch(`https://codechef-api.vercel.app/${username}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (portfolio-stats-fetcher)',
+        'User-Agent': 'Mozilla/5.0 (compatible; PortfolioStats/1.0; +https://example.com)',
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`CodeChef API error: ${response.status}`);
+    if (!data || !data.username) {
+      return { username, available: false };
     }
-
-    const data = await response.json();
 
     return {
       username: data.username || username,
@@ -188,34 +166,34 @@ async function fetchCodeChefStats(username: string) {
       },
       contests: data.contests || [],
       updatedAt: new Date().toISOString(),
+      available: true
     };
-  } catch (error) {
-    console.error('CodeChef stats fetch error:', error);
-    return { error: 'Failed to fetch CodeChef stats', username };
+  } catch {
+    return { username, available: false };
   }
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const githubUsername = searchParams.get('github') || 'abhaypandey';
-    const leetcodeUsername = searchParams.get('leetcode') || 'abhaypandey';
-    const codechefUsername = searchParams.get('codechef') || 'abhaypandey';
+    const settings = DataStore.getSettings();
+    
+    const githubUsername = searchParams.get('github') || settings.githubStatsUsername || settings.github?.replace('https://github.com/', '') || '';
+    const leetcodeUsername = searchParams.get('leetcode') || settings.leetcode?.replace('https://leetcode.com/u/', '').replace(/\/+$/, '') || '';
+    const codechefUsername = searchParams.get('codechef') || settings.codechef?.replace('https://www.codechef.com/users/', '').replace(/\/+$/, '') || '';
 
-    // Fetch all stats in parallel using Promise.allSettled
-    const results = await Promise.allSettled([
-      fetchGitHubStats(githubUsername),
-      fetchLeetCodeStats(leetcodeUsername),
-      fetchCodeChefStats(codechefUsername),
+    const [github, leetcode, codechef] = await Promise.allSettled([
+      githubUsername ? fetchGitHubStats(githubUsername) : Promise.resolve({ username: '', available: false }),
+      leetcodeUsername ? fetchLeetCodeStats(leetcodeUsername) : Promise.resolve({ username: '', available: false }),
+      codechefUsername ? fetchCodeChefStats(codechefUsername) : Promise.resolve({ username: '', available: false }),
     ]);
 
     return NextResponse.json({
-      github: results[0].status === 'fulfilled' ? results[0].value : { error: results[0].reason },
-      leetcode: results[1].status === 'fulfilled' ? results[1].value : { error: results[1].reason },
-      codechef: results[2].status === 'fulfilled' ? results[2].value : { error: results[2].reason },
+      github: github.status === 'fulfilled' ? github.value : { username: githubUsername, available: false },
+      leetcode: leetcode.status === 'fulfilled' ? leetcode.value : { username: leetcodeUsername, available: false },
+      codechef: codechef.status === 'fulfilled' ? codechef.value : { username: codechefUsername, available: false },
       fetchedAt: new Date().toISOString(),
     }, {
-      // Cache for 10 minutes since stats don't change frequently
       headers: {
         'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=300',
       },

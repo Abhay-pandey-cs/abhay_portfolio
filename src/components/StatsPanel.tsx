@@ -50,6 +50,8 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
   const codechefStats = stats?.codechef as CodeChefStats | undefined;
   const hasError = (s: any): s is { error: string; username: string } =>
     s && typeof s === 'object' && 'error' in s;
+  const isUnavailable = (s: any): boolean =>
+    s && typeof s === 'object' && 'available' in s && s.available === false;
 
   const handleWhatsAppRedirect = () => {
     let statsSummary = '📊 Coding Stats:\n';
@@ -64,11 +66,12 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
     }
 
     const message = encodeURIComponent(
-      `Hi! This is Abhay's AI Assistant. Here are the latest coding stats: ${statsSummary}Check out the full portfolio: https://abhaypandey.dev`
+      `Hey Abhay, I came across your portfolio and I'm interested in connecting with you.`
     );
 
-    const whatsappNumber = settings.whatsappNumber || '919999999999';
-    window.open(`https://wa.me/${whatsappNumber}?text=${message}`, '_blank', 'noopener,noreferrer');
+    const whatsappNumber = settings.whatsappNumber;
+    if (!whatsappNumber) return;
+    window.open(`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${message}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -105,8 +108,8 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
       )}
 
       {error && (
-        <div className="text-center py-3 text-red-400 text-[10px] font-mono">
-          {error}
+        <div className="text-center py-3 text-gray-400 text-[10px] font-mono">
+          Stats are currently unavailable. They may be loading or temporarily inaccessible.
         </div>
       )}
 
@@ -154,8 +157,8 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
                 </a>
               )}
             </div>
-            {hasError(stats?.github) ? (
-              <div className="text-[9px] text-red-400">{stats?.github?.error}</div>
+            {hasError(stats?.github) || isUnavailable(stats?.github) ? (
+              <div className="text-[9px] text-gray-400">GitHub stats are currently unavailable.</div>
             ) : githubStats ? (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -207,8 +210,8 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
                 </a>
               )}
             </div>
-            {hasError(stats?.leetcode) ? (
-              <div className="text-[9px] text-red-400">{stats?.leetcode?.error}</div>
+            {hasError(stats?.leetcode) || isUnavailable(stats?.leetcode) ? (
+              <div className="text-[9px] text-gray-400">LeetCode stats are currently unavailable.</div>
             ) : leetcodeStats ? (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -258,8 +261,8 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ settings }) => {
                 </a>
               )}
             </div>
-            {hasError(stats?.codechef) ? (
-              <div className="text-[9px] text-red-400">{stats?.codechef?.error}</div>
+            {hasError(stats?.codechef) || isUnavailable(stats?.codechef) ? (
+              <div className="text-[9px] text-gray-400">CodeChef stats are currently unavailable.</div>
             ) : codechefStats ? (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">

@@ -191,8 +191,14 @@ All answers come directly from your portfolio data, GitHub, LeetCode, and CodeCh
           stats: stats,
           projectContext: {
             settings: context.settings,
-            projectCount: context.projects.length,
-            experienceCount: context.experience.length,
+            projects: context.projects,
+            notes: context.notes,
+            experience: context.experience,
+            learning: context.learning,
+            achievements: context.achievements,
+            certifications: context.certifications,
+            education: context.education,
+            skills: context.skills,
           }
         })
       });
@@ -262,10 +268,11 @@ All answers come directly from your portfolio data, GitHub, LeetCode, and CodeCh
     }
 
     const message = encodeURIComponent(
-      `Hi! I'm Abhay's AI Assistant. You can view his live coding stats and portfolio at: https://abhaypandey.dev\n\n${statsSummary}`
+      `Hey Abhay, I came across your portfolio and I'm interested in connecting with you.`
     );
 
-    const cleanedNumber = context.settings.whatsappNumber?.replace(/[^0-9]/g, '') || '919876543210';
+    const cleanedNumber = context.settings.whatsappNumber?.replace(/[^0-9]/g, '');
+    if (!cleanedNumber) return;
     window.open(`https://wa.me/${cleanedNumber}?text=${message}`, '_blank', 'noopener,noreferrer');
   }, [githubStats, leetcodeStats, codechefStats, context.settings]);
 

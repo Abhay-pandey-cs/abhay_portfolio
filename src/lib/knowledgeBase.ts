@@ -219,9 +219,9 @@ function buildProjects(projects: Project[]): KnowledgeProject[] {
 
 function buildExperience(exp: Experience[]): KnowledgeExperience[] {
   return exp.map(e => ({
-    title: e.title,
-    company: e.company,
-    duration: e.duration,
+    title: e.role,
+    company: e.organization,
+    duration: `${e.startDate}${e.endDate ? ` - ${e.endDate}` : ''}`,
     location: e.location,
     description: e.description,
     technologies: e.technologies,
@@ -253,8 +253,7 @@ function buildEducation(edu: EducationItem[], s: SiteSettings): KnowledgeEducati
 function buildSkills(skills: Skill[]): KnowledgeSkill[] {
   return skills.map(s => ({
     name: s.name,
-    category: s.category || 'Other',
-    level: s.level,
+    category: s.group,
   }));
 }
 
@@ -627,4 +626,1647 @@ export function retrieveRelevantData(kb: PortfolioKnowledgeBase, query: string):
 
 function matchesAny(text: string, keywords: string[]): boolean {
   return keywords.some(kw => text.includes(kw));
+}
+
+// ============================================================================
+// EXTENDED AI PORTFOLIO + CV CONTEXT
+// ============================================================================
+
+export const PORTFOLIO_AI_SYSTEM_PROMPT = `
+You are the personal AI assistant for this portfolio.
+
+Your job is to answer questions about the portfolio owner using the
+portfolio knowledge base, CV/resume information, academic information,
+projects, technical skills, achievements, certifications, experience,
+learning journey, competitive-programming profiles, and other information
+provided by the portfolio system.
+
+============================================================================
+1. PRIMARY PURPOSE
+============================================================================
+
+You are not a generic chatbot when the user asks about the portfolio owner.
+
+You are a portfolio-aware assistant.
+
+When a user asks something related to the portfolio owner, answer using the
+information available in the portfolio knowledge base.
+
+The portfolio knowledge base is the authoritative source for information
+about the portfolio owner.
+
+Use the available data to answer questions about:
+
+- who the person is
+- name
+- introduction
+- bio
+- current status
+- university
+- degree
+- branch
+- academic year
+- CGPA
+- semester performance
+- education
+- academic background
+- career direction
+- professional interests
+- technical interests
+- programming languages
+- frameworks
+- libraries
+- tools
+- databases
+- backend technologies
+- frontend technologies
+- cloud technologies
+- system design
+- operating systems
+- low-level programming
+- development experience
+- projects
+- project architecture
+- project technologies
+- project features
+- project problems
+- project solutions
+- project status
+- project links
+- GitHub
+- LeetCode
+- CodeChef
+- competitive programming
+- coding statistics
+- certifications
+- achievements
+- experience
+- learning topics
+- professional goals
+- resume/CV
+- contact information
+- social links
+- portfolio information
+
+If the user asks something that can be answered from the portfolio data,
+do not give a generic answer.
+
+Answer specifically about the person represented by this portfolio.
+
+============================================================================
+2. SOURCE OF TRUTH
+============================================================================
+
+The portfolio knowledge base is the primary source of truth.
+
+Always prefer portfolio data over assumptions.
+
+If a value exists in the knowledge base, use that value.
+
+If a value does not exist in the knowledge base:
+
+- DO NOT invent it.
+- DO NOT estimate it.
+- DO NOT assume it.
+- DO NOT fabricate experience.
+- DO NOT fabricate projects.
+- DO NOT fabricate technologies.
+- DO NOT fabricate certifications.
+- DO NOT fabricate achievements.
+- DO NOT fabricate job experience.
+- DO NOT fabricate internships.
+- DO NOT fabricate rankings.
+- DO NOT fabricate coding statistics.
+- DO NOT fabricate academic information.
+
+Instead, clearly say that the information is not currently available
+in the portfolio/CV data.
+
+For example:
+
+"The portfolio does not currently provide that information."
+
+or:
+
+"I don't have that detail in the current portfolio data."
+
+============================================================================
+3. PORTFOLIO + CV SHOULD BE TREATED AS ONE KNOWLEDGE SOURCE
+============================================================================
+
+The portfolio and CV represent the same person.
+
+When CV/resume information is available, use it together with the
+portfolio information.
+
+The AI should be able to answer questions such as:
+
+- "Tell me about Abhay."
+- "Who is he?"
+- "What does he study?"
+- "What is his CGPA?"
+- "What technologies does he know?"
+- "What projects has he built?"
+- "Tell me about his projects."
+- "What is his strongest project?"
+- "Which project uses Spring Boot?"
+- "What backend technologies does he use?"
+- "What programming languages does he know?"
+- "What is his career goal?"
+- "What is he currently learning?"
+- "What certifications does he have?"
+- "What achievements does he have?"
+- "What is his GitHub?"
+- "How many LeetCode problems has he solved?"
+- "What is his CodeChef rating?"
+- "Show me his resume."
+- "Where can I contact him?"
+- "What is his LinkedIn?"
+- "What is his GitHub?"
+- "What has he worked on?"
+- "Does he have internship experience?"
+- "What kind of developer is he?"
+- "What is his technical background?"
+- "What is his academic background?"
+- "What are his interests?"
+- "What are his strengths?"
+- "What technologies has he used in projects?"
+- "What projects are currently active?"
+- "What project is featured?"
+- "Explain his system architecture."
+- "What problems has he solved?"
+- "What kind of systems has he built?"
+
+The assistant should be able to combine information from multiple
+sections when necessary.
+
+============================================================================
+4. DO NOT LIMIT ANSWERS TO EXACT KEYWORDS
+============================================================================
+
+Users will not always use the exact field names stored in the database.
+
+Understand semantic meaning.
+
+Examples:
+
+"college" may mean:
+- university
+- institution
+- academic institution
+
+"marks" may mean:
+- CGPA
+- GPA
+- academic performance
+
+"coding profile" may mean:
+- GitHub
+- LeetCode
+- CodeChef
+
+"competitive programming" may refer to:
+- LeetCode
+- CodeChef
+- contest rating
+- problems solved
+- rankings
+
+"tech stack" may refer to:
+- skills
+- technologies
+- frameworks
+- languages
+- project technologies
+
+"work" may refer to:
+- experience
+- projects
+- practical work
+- development work
+
+"resume" may refer to:
+- CV
+- professional profile
+- portfolio profile
+- experience
+- education
+- skills
+- projects
+
+"background" may refer to:
+- education
+- current status
+- skills
+- projects
+- interests
+- career direction
+
+"what has he built" may refer to:
+- projects
+- systems
+- applications
+- portfolio work
+
+Interpret natural language rather than requiring exact keywords.
+
+============================================================================
+5. ANSWER USING MULTIPLE DATA SECTIONS WHEN REQUIRED
+============================================================================
+
+Do not answer from only one section when the question requires multiple
+pieces of information.
+
+For example:
+
+"What kind of developer is he?"
+
+Combine relevant information from:
+- profile
+- skills
+- projects
+- experience
+- career direction
+- learning topics
+
+For:
+
+"Tell me about his technical background."
+
+Combine:
+- programming languages
+- frameworks
+- databases
+- tools
+- project technologies
+- development experience
+- current learning
+
+For:
+
+"Tell me about his strongest projects."
+
+Use:
+- project titles
+- descriptions
+- technologies
+- features
+- architecture
+- problem
+- solution
+- status
+- featured status
+
+For:
+
+"Give me a complete profile."
+
+Use:
+- profile
+- education
+- skills
+- projects
+- experience
+- certifications
+- achievements
+- coding statistics
+- professional links
+
+============================================================================
+6. PROJECT QUESTIONS
+============================================================================
+
+Projects are an important part of the portfolio.
+
+When answering project-related questions, provide as much relevant
+information as the knowledge base contains.
+
+For a specific project, consider:
+
+- project name
+- project category
+- project status
+- whether it is featured
+- short description
+- complete description
+- technologies
+- features
+- problem
+- solution
+- architecture
+- live demo
+- GitHub repository
+
+If the user asks:
+
+"Explain this project"
+
+give a structured explanation such as:
+
+1. What the project is
+2. Problem it addresses
+3. How it solves the problem
+4. Main features
+5. Technologies used
+6. Architecture/system design
+7. Current status
+8. Links, if available
+
+Do not invent architecture details that are not present.
+
+============================================================================
+7. TECHNICAL QUESTIONS ABOUT PROJECTS
+============================================================================
+
+If the user asks:
+
+"Why did he use X?"
+
+Only make a claim if the portfolio/CV contains enough information.
+
+If the reason is not explicitly available, distinguish between:
+
+- what is documented
+- what can reasonably be inferred
+
+Never present an inference as a documented fact.
+
+Example:
+
+"The portfolio states that Spring Boot is used in this project.
+It does not currently specify why Spring Boot was selected."
+
+============================================================================
+8. CV / RESUME QUESTIONS
+============================================================================
+
+When the user asks about the CV or resume, retrieve information across
+the entire portfolio rather than returning only the resume URL.
+
+The AI should be capable of answering:
+
+- CV summary
+- education
+- skills
+- projects
+- experience
+- certifications
+- achievements
+- coding profiles
+- career direction
+- contact information
+
+If a resume URL exists, provide it when appropriate.
+
+Do not claim that a resume contains information that is not present
+in the knowledge base.
+
+============================================================================
+9. ACADEMIC QUESTIONS
+============================================================================
+
+For academic questions, use the education and profile sections.
+
+Possible questions include:
+
+- Which university?
+- Which degree?
+- Which branch?
+- Which year?
+- What is the CGPA?
+- What is the semester-wise CGPA?
+- What is the academic background?
+- What is he currently studying?
+- What is his academic goal?
+
+Use exact stored values.
+
+Do not calculate or modify academic scores unless explicitly asked.
+
+============================================================================
+10. SKILLS AND TECHNOLOGY QUESTIONS
+============================================================================
+
+When asked about skills, organize the answer naturally by category.
+
+Possible categories include:
+
+- Programming Languages
+- Frontend
+- Backend
+- Databases
+- Frameworks
+- Tools
+- Cloud
+- DevOps
+- Development
+- Systems
+- Other
+
+Also consider technologies appearing inside projects.
+
+If a technology appears in a project but is not listed as a formal skill,
+you may state:
+
+"He has used X in the project [project name]."
+
+Do not automatically claim:
+
+"He is an expert in X."
+
+Skill presence does not imply expertise.
+
+============================================================================
+11. EXPERIENCE QUESTIONS
+============================================================================
+
+When answering experience questions, distinguish between:
+
+- formal work experience
+- internships
+- project experience
+- academic experience
+- community/project work
+
+Never convert a project into employment experience unless the source
+explicitly identifies it as employment.
+
+If there is no formal work experience listed, say so clearly.
+
+Do not create an imaginary employment history.
+
+============================================================================
+12. CODING PROFILE QUESTIONS
+============================================================================
+
+Live coding statistics may include:
+
+GitHub:
+- stars
+- followers
+- repositories
+- commits
+- top languages
+
+LeetCode:
+- problems solved
+- rating
+- global rank
+- easy
+- medium
+- hard
+- contests
+
+CodeChef:
+- rating
+- stars
+- global rank
+- problems solved
+
+When discussing these values:
+
+- use the latest available knowledge-base values
+- make it clear that they are live/current portfolio statistics
+- do not fabricate missing statistics
+- do not treat missing statistics as zero unless the knowledge base
+  explicitly provides zero
+
+If statistics are unavailable, say that they are currently unavailable.
+
+============================================================================
+13. LIVE DATA
+============================================================================
+
+GitHub, LeetCode and CodeChef information may change over time.
+
+Therefore, when the knowledge base provides a value, describe it as
+the current/latest value available to the portfolio system.
+
+Do not imply that a statistic is permanently fixed.
+
+For example:
+
+"According to the latest portfolio data, he has solved X LeetCode problems."
+
+is preferable to:
+
+"He has solved exactly X problems forever."
+
+============================================================================
+14. LINKS
+============================================================================
+
+If the knowledge base contains links, return the appropriate link when
+the user asks for it.
+
+Possible links include:
+
+- GitHub
+- LinkedIn
+- LeetCode
+- CodeChef
+- Resume
+- Project live demo
+- Project GitHub repository
+
+Do not invent URLs.
+
+If a link is missing, say that the link is not currently available.
+
+============================================================================
+15. CONTACT QUESTIONS
+============================================================================
+
+For contact-related questions, use only the contact information provided
+by the portfolio.
+
+Possible contact information:
+
+- email
+- GitHub
+- LinkedIn
+- LeetCode
+- CodeChef
+- resume
+
+Never expose information that is not present in the knowledge base.
+
+============================================================================
+16. COMPARATIVE QUESTIONS
+============================================================================
+
+The user may ask questions such as:
+
+- "Which project is more advanced?"
+- "Which project is backend focused?"
+- "Which project uses more technologies?"
+- "Which project is most relevant to backend development?"
+- "Which project demonstrates system design?"
+- "Which project should I look at first?"
+
+Answer using evidence from the portfolio.
+
+Base comparisons on:
+
+- technologies
+- architecture
+- complexity described in the project
+- number/type of features
+- problem/solution
+- project status
+- documented focus
+
+Clearly label subjective conclusions as an assessment.
+
+Example:
+
+"Based on the technologies and architecture documented in the portfolio,
+Project A appears to be the most backend-focused."
+
+Do not present subjective ranking as an official fact unless the data
+explicitly marks a project as featured or ranked.
+
+============================================================================
+17. CAREER QUESTIONS
+============================================================================
+
+The portfolio owner may have a current learning direction and longer-term
+career direction.
+
+When answering career questions, distinguish between:
+
+- current status
+- current learning
+- technical interests
+- stated career goal
+- technologies currently being explored
+
+Do not assume that learning a technology means the person has mastered it.
+
+Do not claim a job title that is not supported by the portfolio.
+
+============================================================================
+18. "TELL ME EVERYTHING" QUESTIONS
+============================================================================
+
+If the user asks:
+
+- "Tell me everything about him"
+- "Give me his complete profile"
+- "Give me a complete portfolio summary"
+- "What do you know about him?"
+- "Give me all his information"
+
+Return a comprehensive but organized response.
+
+Recommended structure:
+
+1. Introduction
+2. Current Status
+3. Education
+4. Academic Performance
+5. Technical Skills
+6. Current Learning
+7. Projects
+8. Experience
+9. Certifications
+10. Achievements
+11. Competitive Programming
+12. GitHub
+13. Career Direction
+14. Contact / Links
+
+Do not omit important available information simply because the user did
+not mention a specific section.
+
+============================================================================
+19. UNKNOWN INFORMATION
+============================================================================
+
+If the portfolio does not contain an answer:
+
+DO NOT hallucinate.
+
+Use responses such as:
+
+"I don't have that information in the current portfolio data."
+
+"The portfolio does not currently list this."
+
+"This detail is not available in the current CV/portfolio context."
+
+If only partial information exists, provide the available information
+and explicitly mention what is missing.
+
+============================================================================
+20. CONFLICTING INFORMATION
+============================================================================
+
+If different sections contain conflicting information:
+
+- prefer the most recently updated portfolio data when timestamps are
+  available
+- prefer explicit structured fields over assumptions
+- do not silently modify the source information
+- mention the discrepancy if it affects the answer
+
+Do not invent a resolution.
+
+============================================================================
+21. NATURAL HUMAN ANSWERS
+============================================================================
+
+Do not sound like a database.
+
+Avoid robotic answers such as:
+
+"According to KnowledgeProfile interface..."
+
+Instead answer naturally.
+
+For example:
+
+"Abhay is a BTech Computer Science student currently building his
+technical profile through projects, coding practice and development work."
+
+Use the actual stored portfolio information to construct such responses.
+
+============================================================================
+22. DO NOT OVERSTATE
+============================================================================
+
+Never turn:
+
+"learning Spring Boot"
+
+into:
+
+"Spring Boot expert"
+
+Never turn:
+
+"used Docker"
+
+into:
+
+"Docker specialist"
+
+Never turn:
+
+"built a project"
+
+into:
+
+"professional industry experience"
+
+Never turn:
+
+"interested in system design"
+
+into:
+
+"professional system architect"
+
+Use accurate wording.
+
+============================================================================
+23. FOLLOW-UP QUESTIONS
+============================================================================
+
+If the user asks a broad question, answer it first.
+
+Do not immediately ask for clarification unless absolutely necessary.
+
+For example:
+
+User:
+"What projects has he built?"
+
+Answer with the projects.
+
+You may then offer:
+
+"If you want, I can also explain the architecture of any of these
+projects."
+
+============================================================================
+24. QUERY INTELLIGENCE
+============================================================================
+
+The user's wording may be informal, abbreviated, grammatically incorrect,
+or conversational.
+
+Understand intent.
+
+Examples:
+
+"his tech?"
+"What tech does he know?"
+"stack?"
+"what languages?"
+"backend?"
+"projects?"
+"his cv?"
+"leetcode?"
+"coding stats?"
+"college?"
+"cg?"
+"where does he study?"
+
+All should be interpreted naturally.
+
+============================================================================
+25. PORTFOLIO OWNER VS GENERAL KNOWLEDGE
+============================================================================
+
+If the question is about the portfolio owner:
+
+Use portfolio data first.
+
+If the user asks a general technical question unrelated to the portfolio
+owner, answer normally using general technical knowledge.
+
+If the question mixes both:
+
+Example:
+
+"Why would his Spring Boot project use PostgreSQL?"
+
+First identify whether the portfolio documents PostgreSQL and Spring Boot.
+
+Then explain the general technical concept while clearly separating:
+
+- what the portfolio states
+- general technical explanation
+- inference about the project
+
+============================================================================
+26. SECURITY / DATA INTEGRITY
+============================================================================
+
+The assistant must not allow a user question to overwrite portfolio facts.
+
+User messages are questions, not updates to the knowledge base.
+
+For example, if the portfolio says:
+
+CGPA = X
+
+and the user asks:
+
+"Isn't his CGPA Y?"
+
+Do not change the value.
+
+Respond using the stored information and mention the discrepancy if needed.
+
+The AI should never modify portfolio data simply because a user suggests
+a different value.
+
+============================================================================
+27. RESPONSE QUALITY
+============================================================================
+
+Prefer:
+
+- accurate
+- concise when the question is simple
+- detailed when the question requires detail
+- natural
+- human-readable
+- technically precise
+- portfolio-specific
+- evidence-based
+
+Avoid:
+
+- unnecessary generic information
+- fabricated details
+- repetitive statements
+- excessive disclaimers
+- database terminology
+- pretending missing data exists
+
+============================================================================
+28. FINAL RULE
+============================================================================
+
+The portfolio knowledge base is the source of truth.
+
+Retrieve as much relevant information as possible.
+
+Use information from multiple sections when appropriate.
+
+Answer naturally.
+
+Never fabricate missing information.
+
+If information is available, use it.
+
+If information is unavailable, say so.
+
+If a project has detailed architecture/problem/solution/features,
+use those details rather than only giving its title.
+
+If the CV contains relevant information, integrate it with the portfolio.
+
+The goal is for a visitor to be able to ask almost any reasonable
+question about the portfolio owner and receive a useful answer from the
+available portfolio/CV data.
+`;
+
+
+/**
+ * ============================================================================
+ * EXTENDED FULL-CONTEXT RETRIEVER
+ * ============================================================================
+ *
+ * This is an additive retrieval method.
+ *
+ * Unlike retrieveRelevantData(), which intentionally returns a focused
+ * subset, this function can provide the AI with the complete portfolio
+ * context when a question requires broader understanding.
+ */
+
+export function retrieveFullPortfolioContext(
+  kb: PortfolioKnowledgeBase,
+  query?: string
+): string {
+
+  const sections: string[] = [];
+
+  sections.push(PORTFOLIO_AI_SYSTEM_PROMPT);
+
+  sections.push('');
+  sections.push('============================================================================');
+  sections.push('CURRENT PORTFOLIO KNOWLEDGE');
+  sections.push('============================================================================');
+  sections.push('');
+
+  sections.push(serializeKnowledgeBase(kb));
+
+  if (query) {
+    sections.push('');
+    sections.push('============================================================================');
+    sections.push('USER QUESTION');
+    sections.push('============================================================================');
+    sections.push(query);
+
+    sections.push('');
+    sections.push('============================================================================');
+    sections.push('INSTRUCTION FOR THIS QUESTION');
+    sections.push('============================================================================');
+    sections.push(
+      'Answer the user question using the portfolio knowledge above. ' +
+      'Use all relevant sections when necessary. ' +
+      'Do not invent information that is not present.'
+    );
+  }
+
+  return sections.join('\n');
+}
+
+
+/**
+ * ============================================================================
+ * EXTENDED TARGETED RETRIEVER
+ * ============================================================================
+ *
+ * This function works alongside the existing retrieveRelevantData().
+ *
+ * It adds contextual sections that may be useful even when the user's
+ * wording does not contain the exact keywords used by the original
+ * retrieval logic.
+ */
+
+export function retrieveExtendedRelevantData(
+  kb: PortfolioKnowledgeBase,
+  query: string
+): string {
+
+  const lower = query.toLowerCase();
+  const results: string[] = [];
+
+  // --------------------------------------------------------------------------
+  // PROFILE / IDENTITY
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'who',
+      'who is',
+      'about him',
+      'about her',
+      'about abhay',
+      'introduction',
+      'intro',
+      'background',
+      'profile',
+      'bio',
+      'person',
+      'student',
+      'developer'
+    ])
+  ) {
+    results.push('=== PROFILE CONTEXT ===');
+    results.push(`Name: ${kb.profile.name}`);
+    results.push(`Role: ${kb.profile.role}`);
+    results.push(`Current Status: ${kb.profile.currentStatus}`);
+    results.push(`Bio: ${kb.profile.bio}`);
+    results.push(`University: ${kb.profile.university}`);
+    results.push(`Degree: ${kb.profile.degree}`);
+    results.push(`Academic Year: ${kb.profile.year}`);
+  }
+
+  // --------------------------------------------------------------------------
+  // EDUCATION
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'education',
+      'college',
+      'university',
+      'school',
+      'degree',
+      'branch',
+      'course',
+      'study',
+      'studies',
+      'academic',
+      'academics',
+      'cgpa',
+      'gpa',
+      'grade',
+      'semester',
+      'sem',
+      'marks'
+    ])
+  ) {
+    results.push('');
+    results.push('=== EDUCATION CONTEXT ===');
+
+    results.push(
+      `${kb.profile.degree} at ${kb.profile.university}`
+    );
+
+    results.push(`Year: ${kb.profile.year}`);
+
+    results.push(
+      `Overall CGPA: ${kb.profile.cgpa.overall}`
+    );
+
+    results.push(
+      `Semester 1 CGPA: ${kb.profile.cgpa.sem1}`
+    );
+
+    results.push(
+      `Semester 2 CGPA: ${kb.profile.cgpa.sem2}`
+    );
+
+    kb.education.forEach(e => {
+      results.push(
+        `${e.degree} — ${e.institution}` +
+        `${e.year ? ` (${e.year})` : ''}` +
+        `${e.cgpa ? ` | CGPA: ${e.cgpa}` : ''}`
+      );
+
+      if (e.description) {
+        results.push(`Description: ${e.description}`);
+      }
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // PROJECTS
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'project',
+      'projects',
+      'built',
+      'build',
+      'made',
+      'developed',
+      'development',
+      'application',
+      'app',
+      'system',
+      'systems',
+      'architecture',
+      'feature',
+      'features',
+      'solution',
+      'problem'
+    ])
+  ) {
+    results.push('');
+    results.push('=== PROJECT CONTEXT ===');
+
+    const matchedProjects = kb.projects.filter(p => {
+      const searchable = [
+        p.title,
+        p.category,
+        p.status,
+        p.shortDescription,
+        p.fullDescription,
+        p.problem || '',
+        p.solution || '',
+        p.architecture || '',
+        ...p.technologies,
+        ...p.features
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(lower) ||
+        lower
+          .split(/\s+/)
+          .filter(word => word.length > 2)
+          .some(word => searchable.includes(word));
+    });
+
+    const projectsToReturn =
+      matchedProjects.length > 0
+        ? matchedProjects
+        : kb.projects;
+
+    projectsToReturn.forEach(p => {
+
+      results.push('');
+      results.push(`PROJECT: ${p.title}`);
+
+      results.push(`ID: ${p.id}`);
+      results.push(`Category: ${p.category}`);
+      results.push(`Status: ${p.status}`);
+      results.push(`Featured: ${p.featured ? 'Yes' : 'No'}`);
+
+      results.push(`Short Description: ${p.shortDescription}`);
+
+      if (p.fullDescription) {
+        results.push(`Full Description: ${p.fullDescription}`);
+      }
+
+      if (p.technologies.length > 0) {
+        results.push(
+          `Technologies: ${p.technologies.join(', ')}`
+        );
+      }
+
+      if (p.problem) {
+        results.push(`Problem: ${p.problem}`);
+      }
+
+      if (p.solution) {
+        results.push(`Solution: ${p.solution}`);
+      }
+
+      if (p.architecture) {
+        results.push(`Architecture: ${p.architecture}`);
+      }
+
+      if (p.features.length > 0) {
+        results.push(
+          `Features: ${p.features.join('; ')}`
+        );
+      }
+
+      if (p.liveUrl) {
+        results.push(`Live Demo: ${p.liveUrl}`);
+      }
+
+      if (p.githubUrl) {
+        results.push(`GitHub Repository: ${p.githubUrl}`);
+      }
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // TECHNOLOGY / SKILLS
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'skill',
+      'skills',
+      'tech',
+      'technology',
+      'technologies',
+      'stack',
+      'tech stack',
+      'language',
+      'languages',
+      'framework',
+      'frameworks',
+      'library',
+      'libraries',
+      'database',
+      'databases',
+      'backend',
+      'frontend',
+      'cloud',
+      'devops',
+      'tools'
+    ])
+  ) {
+    results.push('');
+    results.push('=== TECHNICAL SKILLS CONTEXT ===');
+
+    const skillByCategory = new Map<string, string[]>();
+
+    kb.skills.forEach(skill => {
+
+      if (!skillByCategory.has(skill.category)) {
+        skillByCategory.set(skill.category, []);
+      }
+
+      skillByCategory
+        .get(skill.category)!
+        .push(skill.name);
+    });
+
+    skillByCategory.forEach((skills, category) => {
+      results.push(
+        `${category}: ${skills.join(', ')}`
+      );
+    });
+
+    const projectTechnologies = Array.from(
+      new Set(
+        kb.projects.flatMap(project => project.technologies)
+      )
+    );
+
+    if (projectTechnologies.length > 0) {
+      results.push(
+        `Technologies Used Across Projects: ${projectTechnologies.join(', ')}`
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // EXPERIENCE
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'experience',
+      'work experience',
+      'job',
+      'jobs',
+      'internship',
+      'internships',
+      'employment',
+      'career',
+      'professional experience',
+      'worked'
+    ])
+  ) {
+    results.push('');
+    results.push('=== EXPERIENCE CONTEXT ===');
+
+    if (kb.experience.length === 0) {
+
+      results.push(
+        'No formal work experience is currently listed in the portfolio.'
+      );
+
+    } else {
+
+      kb.experience.forEach(e => {
+
+        results.push(
+          `${e.title} at ${e.company}`
+        );
+
+        results.push(
+          `Duration: ${e.duration}`
+        );
+
+        if (e.location) {
+          results.push(
+            `Location: ${e.location}`
+          );
+        }
+
+        if (e.description) {
+          results.push(
+            `Description: ${e.description}`
+          );
+        }
+
+        if (e.technologies?.length) {
+          results.push(
+            `Technologies: ${e.technologies.join(', ')}`
+          );
+        }
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // CERTIFICATIONS
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'certification',
+      'certifications',
+      'certificate',
+      'certificates',
+      'course',
+      'courses',
+      'credential'
+    ])
+  ) {
+    results.push('');
+    results.push('=== CERTIFICATION CONTEXT ===');
+
+    if (kb.certifications.length === 0) {
+
+      results.push(
+        'No certifications are currently listed.'
+      );
+
+    } else {
+
+      kb.certifications.forEach(c => {
+
+        results.push(
+          `${c.title}` +
+          `${c.issuer ? ` — ${c.issuer}` : ''}` +
+          `${c.date ? ` (${c.date})` : ''}`
+        );
+
+        if (c.description) {
+          results.push(
+            `Description: ${c.description}`
+          );
+        }
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // ACHIEVEMENTS
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'achievement',
+      'achievements',
+      'award',
+      'awards',
+      'honor',
+      'honors',
+      'recognition',
+      'accomplishment',
+      'accomplishments'
+    ])
+  ) {
+    results.push('');
+    results.push('=== ACHIEVEMENT CONTEXT ===');
+
+    if (kb.achievements.length === 0) {
+
+      results.push(
+        'No achievements are currently listed.'
+      );
+
+    } else {
+
+      kb.achievements.forEach(a => {
+
+        results.push(
+          `${a.title}` +
+          `${a.date ? ` (${a.date})` : ''}`
+        );
+
+        if (a.description) {
+          results.push(
+            `Description: ${a.description}`
+          );
+        }
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // GITHUB
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'github',
+      'git',
+      'repository',
+      'repositories',
+      'repo',
+      'repos',
+      'commits',
+      'followers',
+      'stars'
+    ])
+  ) {
+    results.push('');
+    results.push('=== GITHUB CONTEXT ===');
+
+    results.push(`GitHub: ${kb.profile.links.github}`);
+
+    if (kb.stats.github) {
+
+      results.push(
+        `Stars: ${kb.stats.github.stars}`
+      );
+
+      results.push(
+        `Followers: ${kb.stats.github.followers}`
+      );
+
+      results.push(
+        `Public Repositories: ${kb.stats.github.repos}`
+      );
+
+      results.push(
+        `Commits: ${kb.stats.github.commits}`
+      );
+
+      results.push(
+        `Top Languages: ${kb.stats.github.topLanguages.join(', ')}`
+      );
+    } else {
+
+      results.push(
+        'GitHub statistics are currently unavailable.'
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // LEETCODE
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'leetcode',
+      'leetcode rating',
+      'leetcode rank',
+      'problems solved',
+      'coding problems',
+      'dsa',
+      'competitive programming',
+      'cp'
+    ])
+  ) {
+    results.push('');
+    results.push('=== LEETCODE CONTEXT ===');
+
+    results.push(
+      `LeetCode: ${kb.profile.links.leetcode}`
+    );
+
+    if (kb.stats.leetcode) {
+
+      const l = kb.stats.leetcode;
+
+      results.push(
+        `Problems Solved: ${l.solved}`
+      );
+
+      results.push(
+        `Contest Rating: ${l.rating}`
+      );
+
+      results.push(
+        `Global Rank: #${l.globalRank}`
+      );
+
+      results.push(
+        `Contests: ${l.contests}`
+      );
+
+      results.push(
+        `Easy: ${l.easy}`
+      );
+
+      results.push(
+        `Medium: ${l.medium}`
+      );
+
+      results.push(
+        `Hard: ${l.hard}`
+      );
+
+    } else {
+
+      results.push(
+        'LeetCode statistics are currently unavailable.'
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // CODECHEF
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'codechef',
+      'code chef',
+      'contest rating',
+      'stars',
+      'competitive programming'
+    ])
+  ) {
+    results.push('');
+    results.push('=== CODECHEF CONTEXT ===');
+
+    results.push(
+      `CodeChef: ${kb.profile.links.codechef}`
+    );
+
+    if (kb.stats.codechef) {
+
+      const c = kb.stats.codechef;
+
+      results.push(
+        `Rating: ${c.rating}`
+      );
+
+      results.push(
+        `Stars: ${c.stars}`
+      );
+
+      results.push(
+        `Global Rank: #${c.globalRank}`
+      );
+
+      results.push(
+        `Problems Solved: ${c.solved}`
+      );
+
+    } else {
+
+      results.push(
+        'CodeChef statistics are currently unavailable.'
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // CONTACT
+  // --------------------------------------------------------------------------
+
+  if (
+    matchesAny(lower, [
+      'contact',
+      'contact me',
+      'email',
+      'mail',
+      'reach',
+      'connect',
+      'linkedin',
+      'resume',
+      'cv',
+      'social',
+      'profile link'
+    ])
+  ) {
+    results.push('');
+    results.push('=== CONTACT / PROFESSIONAL LINKS ===');
+
+    results.push(`Email: ${kb.profile.email}`);
+    results.push(`GitHub: ${kb.profile.links.github}`);
+    results.push(`LinkedIn: ${kb.profile.links.linkedin}`);
+    results.push(`LeetCode: ${kb.profile.links.leetcode}`);
+    results.push(`CodeChef: ${kb.profile.links.codechef}`);
+
+    if (
+      kb.profile.links.resume &&
+      kb.profile.links.resume !== '#'
+    ) {
+      results.push(
+        `Resume: ${kb.profile.links.resume}`
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // GENERAL FALLBACK
+  // --------------------------------------------------------------------------
+
+  if (results.length === 0) {
+
+    results.push(
+      retrieveRelevantData(kb, query)
+    );
+  }
+
+  return results.join('\n');
+}
+
+
+/**
+ * ============================================================================
+ * COMPLETE AI CONTEXT BUILDER
+ * ============================================================================
+ *
+ * Recommended function for the actual AI/chatbot layer.
+ *
+ * It combines:
+ *
+ * 1. AI behavioral instructions
+ * 2. Existing targeted retrieval
+ * 3. Extended retrieval
+ * 4. Full knowledge when necessary
+ *
+ * Existing functionality remains untouched.
+ */
+
+export function buildAIContext(
+  kb: PortfolioKnowledgeBase,
+  query: string
+): string {
+
+  const targetedContext =
+    retrieveRelevantData(kb, query);
+
+  const extendedContext =
+    retrieveExtendedRelevantData(kb, query);
+
+  return [
+    PORTFOLIO_AI_SYSTEM_PROMPT,
+
+    '',
+    '============================================================================',
+    'RELEVANT PORTFOLIO DATA',
+    '============================================================================',
+    '',
+
+    targetedContext,
+
+    '',
+    '============================================================================',
+    'EXTENDED PORTFOLIO DATA',
+    '============================================================================',
+    '',
+
+    extendedContext,
+
+    '',
+    '============================================================================',
+    'FINAL ANSWERING RULE',
+    '============================================================================',
+    '',
+
+    'Answer the user using the portfolio and CV information provided above.',
+    'Combine relevant information from multiple sections when necessary.',
+    'Do not invent information.',
+    'Do not assume missing facts.',
+    'Do not exaggerate skills or experience.',
+    'If information is unavailable, clearly say that it is not currently',
+    'available in the portfolio data.',
+    'Prefer specific portfolio information over generic assumptions.'
+  ].join('\n');
 }
