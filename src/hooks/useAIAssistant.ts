@@ -287,7 +287,6 @@ All answers come directly from your portfolio data, GitHub, LeetCode, and CodeCh
     codechefStats,
     statsError,
     lastUpdated,
-    hasError,
     knowledgeBase
   };
 }
