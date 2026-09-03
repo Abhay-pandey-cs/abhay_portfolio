@@ -17,6 +17,9 @@ const options: Record<string, any> = {
   w: 'majority',
 };
 
+let client: MongoClient | null = null;
+let clientPromise: Promise<MongoClient> | null = null;
+
 if (uri) {
   if (process.env.NODE_ENV === 'development') {
     const globalWithMongo = global as typeof globalThis & {
