@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { Experience } from '@/types';
 
 export async function GET() {
   try {
-    const experience = DataStore.getExperience();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+    const experience = await db.collection('experience').find({}).toArray();
     return NextResponse.json(experience);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch experience' }, { status: 500 });
@@ -32,8 +36,13 @@ export async function POST(request: Request) {
       certificateUrl: body.certificateUrl || undefined
     };
 
-    const saved = DataStore.saveExperience(exp);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('experience').insertOne(exp as any);
+    return NextResponse.json(exp, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save experience' }, { status: 500 });
   }
@@ -45,7 +54,12 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    DataStore.deleteExperience(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('experience').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete experience' }, { status: 500 });

@@ -1223,6 +1223,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <span>Export Full JSON Database</span>
                 </button>
               </div>
+
+              <div className="pt-4 space-y-2">
+                <span className="text-gray-400 font-bold uppercase tracking-wider text-[11px]">Export Collections Separately</span>
+                <p className="text-[10px] text-gray-500">Download each collection as its own JSON file for MongoDB import</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {[
+                    { name: 'projects', data: projects },
+                    { name: 'skills', data: skills },
+                    { name: 'experience', data: experience },
+                    { name: 'education', data: DataStore.getEducation() },
+                    { name: 'certifications', data: certifications },
+                    { name: 'achievements', data: achievements },
+                    { name: 'community', data: community },
+                    { name: 'learning', data: learning },
+                    { name: 'notes', data: notes },
+                    { name: 'settings', data: [settings] }
+                  ].map(col => (
+                    <button
+                      key={col.name}
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(col.data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${col.name}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="px-3 py-2 rounded bg-[#141518] border border-[#282a32] hover:border-[#38bdf8] text-[11px] text-gray-300 hover:text-white transition-colors text-left"
+                    >
+                      <span className="font-bold">{col.name}</span>
+                      <span className="text-[10px] text-gray-500 ml-1">
+                        ({Array.isArray(col.data) ? col.data.length : 1})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}

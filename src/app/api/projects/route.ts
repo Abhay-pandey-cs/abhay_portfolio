@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { Project } from '@/types';
 
 export async function GET(request: Request) {
@@ -9,10 +9,15 @@ export async function GET(request: Request) {
     const category = searchParams.get('category');
     const featuredOnly = searchParams.get('featured') === 'true';
 
-    let projects = DataStore.getProjects();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    let projects = await db.collection('projects').find({}).toArray();
 
     if (slug) {
-      const project = DataStore.getProjectBySlug(slug);
+      const project = projects.find((p: any) => p.slug === slug || p.id === slug);
       if (!project) {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       }
@@ -20,11 +25,11 @@ export async function GET(request: Request) {
     }
 
     if (featuredOnly) {
-      projects = projects.filter(p => p.featured && p.published);
+      projects = projects.filter((p: any) => p.featured && p.published);
     }
 
     if (category) {
-      projects = projects.filter(p => p.category === category);
+      projects = projects.filter((p: any) => p.category === category);
     }
 
     return NextResponse.json(projects);
@@ -70,8 +75,13 @@ export async function POST(request: Request) {
       updatedAt: new Date().toISOString().split('T')[0]
     };
 
-    const saved = DataStore.saveProject(newProject);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('projects').insertOne(newProject as any);
+    return NextResponse.json(newProject, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to create/update project' }, { status: 500 });
   }
@@ -80,8 +90,33 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
     if (body.action === 'reorder' && Array.isArray(body.projectIds)) {
-      const reordered = DataStore.reorderProjects(body.projectIds);
+      const projects = await db.collection('projects').find({}).toArray();
+      const projectMap = new Map(projects.map((p: any) => [p.id, p]));
+      const reordered: any[] = [];
+
+      body.projectIds.forEach((id: string, index: number) => {
+        const p = projectMap.get(id);
+        if (p) {
+          reordered.push({ ...p, displayOrder: index + 1 });
+          projectMap.delete(id);
+        }
+      });
+
+      projectMap.forEach((p: any) => {
+        reordered.push({ ...p, displayOrder: reordered.length + 1 });
+      });
+
+      await db.collection('projects').deleteMany({});
+      if (reordered.length > 0) {
+        await db.collection('projects').insertMany(reordered);
+      }
+
       return NextResponse.json(reordered);
     }
 
@@ -89,8 +124,9 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Project ID is required for update' }, { status: 400 });
     }
 
-    const saved = DataStore.saveProject(body);
-    return NextResponse.json(saved);
+    const updated = { ...body, updatedAt: new Date().toISOString().split('T')[0] };
+    await db.collection('projects').replaceOne({ id: body.id }, updated as any, { upsert: true });
+    return NextResponse.json(updated);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to update project' }, { status: 500 });
   }
@@ -104,7 +140,12 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    DataStore.deleteProject(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('projects').deleteOne({ id });
     return NextResponse.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });

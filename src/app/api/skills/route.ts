@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { Skill } from '@/types';
 
 export async function GET() {
   try {
-    const skills = DataStore.getSkills();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+    const skills = await db.collection('skills').find({}).toArray();
     return NextResponse.json(skills);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch skills' }, { status: 500 });
@@ -26,8 +30,13 @@ export async function POST(request: Request) {
       highlight: Boolean(body.highlight)
     };
 
-    const saved = DataStore.saveSkill(skill);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('skills').insertOne(skill as any);
+    return NextResponse.json(skill, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save skill' }, { status: 500 });
   }
@@ -39,7 +48,12 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    DataStore.deleteSkill(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('skills').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete skill' }, { status: 500 });

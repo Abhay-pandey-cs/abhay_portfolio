@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { EducationItem } from '@/types';
 
 export async function GET() {
   try {
-    const education = DataStore.getEducation();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+    const education = await db.collection('education').find({}).toArray();
     return NextResponse.json(education);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch education' }, { status: 500 });
@@ -29,8 +33,13 @@ export async function POST(request: Request) {
       description: body.description || ''
     };
 
-    const saved = DataStore.saveEducation(education);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('education').insertOne(education as any);
+    return NextResponse.json(education, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save education' }, { status: 500 });
   }
@@ -42,7 +51,12 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    DataStore.deleteEducation(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('education').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete education' }, { status: 500 });

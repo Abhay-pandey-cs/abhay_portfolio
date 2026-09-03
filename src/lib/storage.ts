@@ -10,18 +10,6 @@ import {
   Experience,
   EducationItem
 } from '@/types';
-import { 
-  initialProjects, 
-  initialLearningTopics, 
-  initialNotes, 
-  initialSkills, 
-  initialSiteSettings, 
-  initialCommunityProjects,
-  initialCertifications,
-  initialAchievements,
-  initialExperience,
-  initialEducation
-} from './initialData';
 
 const STORAGE_KEYS = {
   PROJECTS: 'abhay_portfolio_projects_v3',
@@ -36,8 +24,6 @@ const STORAGE_KEYS = {
   EDUCATION: 'abhay_portfolio_education_v3'
 };
 
-// Check if a storage key has been initialized (even if empty)
-// This distinguishes "never set" from "set but emptied"
 function isInitialized(key: string): boolean {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem(`${key}_initialized`) === 'true';
@@ -91,23 +77,47 @@ const globalForStore = globalThis as unknown as { portfolioStore?: GlobalStore }
 export function getServerStore(): GlobalStore {
   if (!globalForStore.portfolioStore) {
     globalForStore.portfolioStore = {
-      projects: [...initialProjects],
-      learning: [...initialLearningTopics],
-      notes: [...initialNotes],
-      skills: [...initialSkills],
-      settings: { ...initialSiteSettings },
-      community: [...initialCommunityProjects],
-      certifications: [...initialCertifications],
-      achievements: [...initialAchievements],
-      experience: [...initialExperience],
-      education: [...initialEducation]
+      projects: [],
+      learning: [],
+      notes: [],
+      skills: [],
+      settings: {
+        name: '',
+        role: '',
+        subtitle: '',
+        bio: '',
+        currentStatus: '',
+        university: '',
+        degree: '',
+        year: '',
+        cgpa: '',
+        cgpaFirstSem: '',
+        cgpaSecondSem: '',
+        cgpaOverall: '',
+        email: '',
+        github: '',
+        linkedin: '',
+        leetcode: '',
+        codechef: '',
+        whatsappNumber: '',
+        resumeUrl: '',
+        githubStatsUsername: '',
+        splineSceneUrl: '',
+        footerQuote: '',
+        profilePhoto: '',
+        enablePhotoBooth: false
+      },
+      community: [],
+      certifications: [],
+      achievements: [],
+      experience: [],
+      education: []
     };
   }
   return globalForStore.portfolioStore;
 }
 
 export const DataStore = {
-  // Projects
   getProjects(): Project[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<Project[]>(STORAGE_KEYS.PROJECTS, []);
@@ -115,11 +125,10 @@ export const DataStore = {
         return stored.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
       }
       if (!isInitialized(STORAGE_KEYS.PROJECTS)) {
-        setClientItem(STORAGE_KEYS.PROJECTS, initialProjects);
+        setClientItem(STORAGE_KEYS.PROJECTS, []);
         markInitialized(STORAGE_KEYS.PROJECTS);
-        return initialProjects;
+        return [];
       }
-      // Initialized but empty — return empty, don't re-seed
       return stored;
     }
     return getServerStore().projects.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
@@ -187,15 +196,14 @@ export const DataStore = {
     return reordered;
   },
 
-  // Learning Topics
   getLearningTopics(): LearningTopic[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<LearningTopic[]>(STORAGE_KEYS.LEARNING, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.LEARNING)) {
-        setClientItem(STORAGE_KEYS.LEARNING, initialLearningTopics);
+        setClientItem(STORAGE_KEYS.LEARNING, []);
         markInitialized(STORAGE_KEYS.LEARNING);
-        return initialLearningTopics;
+        return [];
       }
       return stored;
     }
@@ -233,15 +241,14 @@ export const DataStore = {
     return true;
   },
 
-  // Notes
   getNotes(): Note[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<Note[]>(STORAGE_KEYS.NOTES, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.NOTES)) {
-        setClientItem(STORAGE_KEYS.NOTES, initialNotes);
+        setClientItem(STORAGE_KEYS.NOTES, []);
         markInitialized(STORAGE_KEYS.NOTES);
-        return initialNotes;
+        return [];
       }
       return stored;
     }
@@ -279,15 +286,14 @@ export const DataStore = {
     return true;
   },
 
-  // Skills
   getSkills(): Skill[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<Skill[]>(STORAGE_KEYS.SKILLS, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.SKILLS)) {
-        setClientItem(STORAGE_KEYS.SKILLS, initialSkills);
+        setClientItem(STORAGE_KEYS.SKILLS, []);
         markInitialized(STORAGE_KEYS.SKILLS);
-        return initialSkills;
+        return [];
       }
       return stored;
     }
@@ -325,15 +331,14 @@ export const DataStore = {
     return true;
   },
 
-  // Certifications
   getCertifications(): Certification[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<Certification[]>(STORAGE_KEYS.CERTIFICATIONS, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.CERTIFICATIONS)) {
-        setClientItem(STORAGE_KEYS.CERTIFICATIONS, initialCertifications);
+        setClientItem(STORAGE_KEYS.CERTIFICATIONS, []);
         markInitialized(STORAGE_KEYS.CERTIFICATIONS);
-        return initialCertifications;
+        return [];
       }
       return stored;
     }
@@ -371,15 +376,14 @@ export const DataStore = {
     return true;
   },
 
-  // Achievements
   getAchievements(): Achievement[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<Achievement[]>(STORAGE_KEYS.ACHIEVEMENTS, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.ACHIEVEMENTS)) {
-        setClientItem(STORAGE_KEYS.ACHIEVEMENTS, initialAchievements);
+        setClientItem(STORAGE_KEYS.ACHIEVEMENTS, []);
         markInitialized(STORAGE_KEYS.ACHIEVEMENTS);
-        return initialAchievements;
+        return [];
       }
       return stored;
     }
@@ -417,15 +421,14 @@ export const DataStore = {
     return true;
   },
 
-  // Community
   getCommunity(): CommunityProject[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<CommunityProject[]>(STORAGE_KEYS.COMMUNITY, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.COMMUNITY)) {
-        setClientItem(STORAGE_KEYS.COMMUNITY, initialCommunityProjects);
+        setClientItem(STORAGE_KEYS.COMMUNITY, []);
         markInitialized(STORAGE_KEYS.COMMUNITY);
-        return initialCommunityProjects;
+        return [];
       }
       return stored;
     }
@@ -463,15 +466,14 @@ export const DataStore = {
     return true;
   },
 
-  // Experience
   getExperience(): Experience[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<Experience[]>(STORAGE_KEYS.EXPERIENCE, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.EXPERIENCE)) {
-        setClientItem(STORAGE_KEYS.EXPERIENCE, initialExperience);
+        setClientItem(STORAGE_KEYS.EXPERIENCE, []);
         markInitialized(STORAGE_KEYS.EXPERIENCE);
-        return initialExperience;
+        return [];
       }
       return stored;
     }
@@ -509,15 +511,14 @@ export const DataStore = {
     return true;
   },
 
-  // Education
   getEducation(): EducationItem[] {
     if (typeof window !== 'undefined') {
       const stored = getClientItem<EducationItem[]>(STORAGE_KEYS.EDUCATION, []);
       if (stored && stored.length > 0) return stored;
       if (!isInitialized(STORAGE_KEYS.EDUCATION)) {
-        setClientItem(STORAGE_KEYS.EDUCATION, initialEducation);
+        setClientItem(STORAGE_KEYS.EDUCATION, []);
         markInitialized(STORAGE_KEYS.EDUCATION);
-        return initialEducation;
+        return [];
       }
       return stored;
     }
@@ -555,11 +556,35 @@ export const DataStore = {
     return true;
   },
 
-  // Settings
   getSettings(): SiteSettings {
     if (typeof window !== 'undefined') {
-      const stored = getClientItem<SiteSettings>(STORAGE_KEYS.SETTINGS, initialSiteSettings);
-      return { ...initialSiteSettings, ...(stored || {}) };
+      const stored = getClientItem<SiteSettings>(STORAGE_KEYS.SETTINGS, {
+        name: '',
+        role: '',
+        subtitle: '',
+        bio: '',
+        currentStatus: '',
+        university: '',
+        degree: '',
+        year: '',
+        cgpa: '',
+        cgpaFirstSem: '',
+        cgpaSecondSem: '',
+        cgpaOverall: '',
+        email: '',
+        github: '',
+        linkedin: '',
+        leetcode: '',
+        codechef: '',
+        whatsappNumber: '',
+        resumeUrl: '',
+        githubStatsUsername: '',
+        splineSceneUrl: '',
+        footerQuote: '',
+        profilePhoto: '',
+        enablePhotoBooth: false
+      });
+      return { ...this.getSettings(), ...(stored || {}) };
     }
     return getServerStore().settings;
   },
@@ -577,29 +602,78 @@ export const DataStore = {
 
   resetAll(): void {
     if (typeof window !== 'undefined') {
-      setClientItem(STORAGE_KEYS.PROJECTS, initialProjects);
-      setClientItem(STORAGE_KEYS.LEARNING, initialLearningTopics);
-      setClientItem(STORAGE_KEYS.NOTES, initialNotes);
-      setClientItem(STORAGE_KEYS.SKILLS, initialSkills);
-      setClientItem(STORAGE_KEYS.SETTINGS, initialSiteSettings);
-      setClientItem(STORAGE_KEYS.COMMUNITY, initialCommunityProjects);
-      setClientItem(STORAGE_KEYS.CERTIFICATIONS, initialCertifications);
-      setClientItem(STORAGE_KEYS.ACHIEVEMENTS, initialAchievements);
-      setClientItem(STORAGE_KEYS.EXPERIENCE, initialExperience);
-      setClientItem(STORAGE_KEYS.EDUCATION, initialEducation);
-      // Re-mark all as initialized so future get* calls don't re-seed
+      setClientItem(STORAGE_KEYS.PROJECTS, []);
+      setClientItem(STORAGE_KEYS.LEARNING, []);
+      setClientItem(STORAGE_KEYS.NOTES, []);
+      setClientItem(STORAGE_KEYS.SKILLS, []);
+      setClientItem(STORAGE_KEYS.SETTINGS, {
+        name: '',
+        role: '',
+        subtitle: '',
+        bio: '',
+        currentStatus: '',
+        university: '',
+        degree: '',
+        year: '',
+        cgpa: '',
+        cgpaFirstSem: '',
+        cgpaSecondSem: '',
+        cgpaOverall: '',
+        email: '',
+        github: '',
+        linkedin: '',
+        leetcode: '',
+        codechef: '',
+        whatsappNumber: '',
+        resumeUrl: '',
+        githubStatsUsername: '',
+        splineSceneUrl: '',
+        footerQuote: '',
+        profilePhoto: '',
+        enablePhotoBooth: false
+      });
+      setClientItem(STORAGE_KEYS.COMMUNITY, []);
+      setClientItem(STORAGE_KEYS.CERTIFICATIONS, []);
+      setClientItem(STORAGE_KEYS.ACHIEVEMENTS, []);
+      setClientItem(STORAGE_KEYS.EXPERIENCE, []);
+      setClientItem(STORAGE_KEYS.EDUCATION, []);
       Object.values(STORAGE_KEYS).forEach(key => markInitialized(key));
     } else {
-      getServerStore().projects = [...initialProjects];
-      getServerStore().learning = [...initialLearningTopics];
-      getServerStore().notes = [...initialNotes];
-      getServerStore().skills = [...initialSkills];
-      getServerStore().settings = { ...initialSiteSettings };
-      getServerStore().community = [...initialCommunityProjects];
-      getServerStore().certifications = [...initialCertifications];
-      getServerStore().achievements = [...initialAchievements];
-      getServerStore().experience = [...initialExperience];
-      getServerStore().education = [...initialEducation];
+      getServerStore().projects = [];
+      getServerStore().learning = [];
+      getServerStore().notes = [];
+      getServerStore().skills = [];
+      getServerStore().settings = {
+        name: '',
+        role: '',
+        subtitle: '',
+        bio: '',
+        currentStatus: '',
+        university: '',
+        degree: '',
+        year: '',
+        cgpa: '',
+        cgpaFirstSem: '',
+        cgpaSecondSem: '',
+        cgpaOverall: '',
+        email: '',
+        github: '',
+        linkedin: '',
+        leetcode: '',
+        codechef: '',
+        whatsappNumber: '',
+        resumeUrl: '',
+        githubStatsUsername: '',
+        splineSceneUrl: '',
+        footerQuote: '',
+        profilePhoto: '',
+        enablePhotoBooth: false
+      };
+      getServerStore().community = [];
+      getServerStore().certifications = [];
+      getServerStore().achievements = [];
+      getServerStore().experience = [];
+      getServerStore().education = [];
     }
   }
 };
