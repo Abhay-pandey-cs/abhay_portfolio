@@ -90,15 +90,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'experience' | 'certifications' | 'achievements' | 'learning' | 'notes' | 'skills' | 'community' | 'education' | 'database' | 'settings'>('overview');
 
   // Live state
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
-  const [learning, setLearning] = useState<LearningTopic[]>(initialLearning);
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
-  const [skills, setSkills] = useState<Skill[]>(initialSkills);
-  const [settings, setSettings] = useState<SiteSettings>(initialSettings);
-  const [certifications, setCertifications] = useState<Certification[]>(DataStore.getCertifications());
-  const [achievements, setAchievements] = useState<Achievement[]>(DataStore.getAchievements());
-  const [experience, setExperience] = useState<Experience[]>(DataStore.getExperience());
-  const [community, setCommunity] = useState<CommunityProject[]>(initialCommunity || DataStore.getCommunity());
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [learning, setLearning] = useState<LearningTopic[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [settings, setSettings] = useState<SiteSettings>({
+    name: '',
+    role: '',
+    subtitle: '',
+    bio: '',
+    currentStatus: '',
+    university: '',
+    degree: '',
+    year: '',
+    cgpa: '',
+    cgpaFirstSem: '',
+    cgpaSecondSem: '',
+    cgpaOverall: '',
+    email: '',
+    github: '',
+    linkedin: '',
+    leetcode: '',
+    codechef: '',
+    whatsappNumber: '',
+    resumeUrl: '',
+    githubStatsUsername: '',
+    splineSceneUrl: '',
+    footerQuote: '',
+    profilePhoto: '',
+    enablePhotoBooth: false
+  });
+  const [certifications, setCertifications] = useState<Certification[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [experience, setExperience] = useState<Experience[]>([]);
+  const [community, setCommunity] = useState<CommunityProject[]>([]);
+  const [education, setEducation] = useState<EducationItem[]>([]);
 
   // Modals & Editors
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -110,7 +136,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editingExp, setEditingExp] = useState<Experience | null>(null);
   const [editingCommunity, setEditingCommunity] = useState<CommunityProject | null>(null);
   const [editingEducation, setEditingEducation] = useState<EducationItem | null>(null);
-  const [education, setEducation] = useState<EducationItem[]>(initialEducation.length > 0 ? initialEducation : DataStore.getEducation());
 
   // Safe Delete Modal State
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string; title: string } | null>(null);
@@ -132,8 +157,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setCertifications(initialCertifications);
     setAchievements(initialAchievements);
     setExperience(initialExperience);
-    setCommunity(initialCommunity || DataStore.getCommunity());
-    setEducation(initialEducation.length > 0 ? initialEducation : DataStore.getEducation());
+    setCommunity(initialCommunity || []);
+    setEducation(initialEducation);
     setIsInitialSync(false);
   }, []);
 
@@ -149,45 +174,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // Safe delete handler
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
-    if (deleteTarget.type === 'project') {
-      DataStore.deleteProject(deleteTarget.id);
-      setProjects(DataStore.getProjects());
-    } else if (deleteTarget.type === 'learning') {
-      DataStore.deleteLearningTopic(deleteTarget.id);
-      setLearning(DataStore.getLearningTopics());
-    } else if (deleteTarget.type === 'note') {
-      DataStore.deleteNote(deleteTarget.id);
-      setNotes(DataStore.getNotes());
-    } else if (deleteTarget.type === 'skill') {
-      DataStore.deleteSkill(deleteTarget.id);
-      setSkills(DataStore.getSkills());
-    } else if (deleteTarget.type === 'certification') {
-      DataStore.deleteCertification(deleteTarget.id);
-      setCertifications(DataStore.getCertifications());
-    } else if (deleteTarget.type === 'achievement') {
-      DataStore.deleteAchievement(deleteTarget.id);
-      setAchievements(DataStore.getAchievements());
-    } else if (deleteTarget.type === 'experience') {
-      DataStore.deleteExperience(deleteTarget.id);
-      setExperience(DataStore.getExperience());
-    } else if (deleteTarget.type === 'community') {
-      DataStore.deleteCommunity(deleteTarget.id);
-      setCommunity(DataStore.getCommunity());
-    } else if (deleteTarget.type === 'education') {
-      DataStore.deleteEducation(deleteTarget.id);
-      setEducation(DataStore.getEducation());
+    try {
+      const res = await fetch(`/api/${deleteTarget.type === 'learning' ? 'learning' : deleteTarget.type}s`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deleteTarget.id }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      onDataChange?.();
+      showToast(`Deleted ${deleteTarget.type} "${deleteTarget.title}"`);
+    } catch (e) {
+      showToast('Failed to delete');
     }
-
-    showToast(`Deleted ${deleteTarget.type} "${deleteTarget.title}"`);
     setDeleteTarget(null);
     if (onDataChange) onDataChange();
   };
 
   // Reorder projects
-  const handleMoveProject = (index: number, direction: 'up' | 'down') => {
+  const handleMoveProject = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === projects.length - 1) return;
 
@@ -198,37 +205,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     reordered[targetIndex] = temp;
 
     const ids = reordered.map(p => p.id);
-    const updated = DataStore.reorderProjects(ids);
-    setProjects(updated);
-    if (onDataChange) onDataChange();
-    showToast('Project display order updated.');
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reorder', projectIds: ids }),
+      });
+      if (!res.ok) throw new Error('Reorder failed');
+      const updated = await res.json();
+      setProjects(updated);
+      if (onDataChange) onDataChange();
+      showToast('Project display order updated.');
+    } catch (e) {
+      showToast('Failed to reorder projects');
+    }
   };
 
   // Save Project
-  const handleSaveProject = (project: Project) => {
-    const saved = DataStore.saveProject(project);
-    setProjects(DataStore.getProjects());
-    setEditingProject(null);
-    showToast(`Project "${saved.title}" saved successfully!`);
-    if (onDataChange) onDataChange();
+  const handleSaveProject = async (project: Project) => {
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(project),
+      });
+      if (!res.ok) throw new Error('Failed to save project');
+      const saved = await res.json();
+      onDataChange?.();
+      setEditingProject(null);
+      showToast(`Project "${saved.title}" saved successfully!`);
+    } catch (e) {
+      showToast('Failed to save project');
+    }
   };
 
   // Save Settings
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = DataStore.updateSettings(settings);
-    setSettings(updated);
-    showToast('Site settings, profiles & resume updated.');
-    if (onDataChange) onDataChange();
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (!res.ok) throw new Error('Failed to save settings');
+      const updated = await res.json();
+      setSettings(updated);
+      showToast('Site settings, profiles & resume updated.');
+      if (onDataChange) onDataChange();
+    } catch (e) {
+      showToast('Failed to save settings');
+    }
   };
 
   // Quick learning status switch
-  const handleSetLearningStatus = (id: string, status: LearningStatus) => {
+  const handleSetLearningStatus = async (id: string, status: LearningStatus) => {
     const topic = learning.find((t) => t.id === id);
     if (!topic) return;
-    DataStore.saveLearningTopic({ ...topic, status });
-    setLearning(DataStore.getLearningTopics());
-    if (onDataChange) onDataChange();
+    try {
+      const res = await fetch('/api/learning', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...topic, status }),
+      });
+      if (!res.ok) throw new Error('Failed to update learning topic');
+      onDataChange?.();
+      if (onDataChange) onDataChange();
+    } catch (e) {
+      showToast('Failed to update learning topic');
+    }
   };
 
   // Export JSON backup
@@ -243,7 +288,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       achievements,
       experience,
       community,
-      education: DataStore.getEducation(),
+      education,
       exportDate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -256,21 +301,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // Reset to Defaults
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     if (window.confirm('Reset all portfolio projects, notes, and topics to original defaults?')) {
-      DataStore.resetAll();
-      setProjects(DataStore.getProjects());
-      setLearning(DataStore.getLearningTopics());
-      setNotes(DataStore.getNotes());
-      setSkills(DataStore.getSkills());
-      setSettings(DataStore.getSettings());
-      setCertifications(DataStore.getCertifications());
-      setAchievements(DataStore.getAchievements());
-      setExperience(DataStore.getExperience());
-      setCommunity(DataStore.getCommunity());
-      setEducation(DataStore.getEducation());
-      showToast('Reset to original default state complete.');
-      if (onDataChange) onDataChange();
+      try {
+        const res = await fetch('/api/backup', { method: 'POST' });
+        if (!res.ok) throw new Error('Reset failed');
+        onDataChange?.();
+        showToast('Reset to original default state complete.');
+        if (onDataChange) onDataChange();
+      } catch (e) {
+        showToast('Failed to reset defaults');
+      }
     }
   };
 
@@ -709,34 +750,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             {proj.status}
                           </span>
                         </td>
-                        <td className="p-3">
-                          <button
-                            onClick={() => {
-                              const updated = { ...proj, published: !proj.published };
-                              DataStore.saveProject(updated);
-                              setProjects(DataStore.getProjects());
-                              if (onDataChange) onDataChange();
-                            }}
-                            className={`px-2 py-0.5 rounded text-[10px] ${
-                              proj.published ? 'bg-[#23a55a]/20 text-[#23a55a]' : 'bg-gray-700/30 text-gray-400'
-                            }`}
-                          >
-                            {proj.published ? 'Published' : 'Draft'}
-                          </button>
-                        </td>
-                        <td className="p-3">
-                          <button
-                            onClick={() => {
-                              const updated = { ...proj, featured: !proj.featured };
-                              DataStore.saveProject(updated);
-                              setProjects(DataStore.getProjects());
-                              if (onDataChange) onDataChange();
-                            }}
-                            className={`px-2 py-0.5 rounded text-[10px] ${
-                              proj.featured ? 'bg-[#f0b232]/20 text-[#f0b232]' : 'bg-gray-700/30 text-gray-400'
-                            }`}
-                          >
-                            {proj.featured ? 'Featured' : 'Normal'}
+                         <td className="p-3">
+                           <button
+                             onClick={async () => {
+                               const updated = { ...proj, published: !proj.published };
+                               await fetch('/api/projects', {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify(updated),
+                               });
+                               onDataChange?.();
+                               if (onDataChange) onDataChange();
+                             }}
+                             className={`px-2 py-0.5 rounded text-[10px] ${
+                               proj.published ? 'bg-[#23a55a]/20 text-[#23a55a]' : 'bg-gray-700/30 text-gray-400'
+                             }`}
+                           >
+                             {proj.published ? 'Published' : 'Draft'}
+                           </button>
+                         </td>
+                         <td className="p-3">
+                           <button
+                             onClick={async () => {
+                               const updated = { ...proj, featured: !proj.featured };
+                               await fetch('/api/projects', {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify(updated),
+                               });
+                               onDataChange?.();
+                               if (onDataChange) onDataChange();
+                             }}
+                             className={`px-2 py-0.5 rounded text-[10px] ${
+                               proj.featured ? 'bg-[#f0b232]/20 text-[#f0b232]' : 'bg-gray-700/30 text-gray-400'
+                             }`}
+                           >
+                             {proj.featured ? 'Featured' : 'Normal'}
                           </button>
                         </td>
                         <td className="p-3 text-right">
@@ -1232,7 +1281,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     { name: 'projects', data: projects },
                     { name: 'skills', data: skills },
                     { name: 'experience', data: experience },
-                    { name: 'education', data: DataStore.getEducation() },
+                     { name: 'education', data: education },
                     { name: 'certifications', data: certifications },
                     { name: 'achievements', data: achievements },
                     { name: 'community', data: community },
@@ -1790,13 +1839,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button onClick={() => setEditingCert(null)} className="px-3 py-1.5 rounded bg-[#25272e] text-gray-300">Cancel</button>
-              <button onClick={() => {
-                DataStore.saveCertification(editingCert);
-                setCertifications(DataStore.getCertifications());
-                setEditingCert(null);
-                showToast('Certificate saved.');
-                if (onDataChange) onDataChange();
-              }} disabled={!editingCert.title} className="px-3 py-1.5 rounded bg-[#f0b232] text-black font-bold">Save Certificate</button>
+               <button onClick={async () => {
+                 await fetch('/api/certifications', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify(editingCert),
+                 });
+                 onDataChange?.();
+                 setEditingCert(null);
+                 showToast('Certificate saved.');
+                 if (onDataChange) onDataChange();
+               }} disabled={!editingCert.title} className="px-3 py-1.5 rounded bg-[#f0b232] text-black font-bold">Save Certificate</button>
             </div>
           </div>
         </div>
@@ -1870,13 +1923,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button onClick={() => setEditingAch(null)} className="px-3 py-1.5 rounded bg-[#25272d] text-gray-300">Cancel</button>
-                <button onClick={() => {
-                  DataStore.saveAchievement(editingAch);
-                  setAchievements(DataStore.getAchievements());
-                  setEditingAch(null);
-                  showToast('Achievement saved.');
-                  if (onDataChange) onDataChange();
-                }} disabled={!editingAch.title} className="px-3 py-1.5 rounded bg-[#23a55a] text-white font-bold">Save Achievement</button>
+                 <button onClick={async () => {
+                   await fetch('/api/achievements', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify(editingAch),
+                   });
+                   onDataChange?.();
+                   setEditingAch(null);
+                   showToast('Achievement saved.');
+                   if (onDataChange) onDataChange();
+                 }} disabled={!editingAch.title} className="px-3 py-1.5 rounded bg-[#23a55a] text-white font-bold">Save Achievement</button>
               </div>
             </div>
           </div>
@@ -1998,16 +2055,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
              </div>
              <div className="p-4 bg-[#1a1b20] border-t border-[#282a32] flex items-center justify-end gap-2">
                <button onClick={() => setEditingExp(null)} className="px-4 py-2 rounded bg-[#25272e] text-gray-300">Cancel</button>
-               <button onClick={() => {
-                 DataStore.saveExperience(editingExp);
-                 setExperience(DataStore.getExperience());
-                 setEditingExp(null);
-                 showToast('Experience saved.');
-                 if (onDataChange) onDataChange();
-               }} disabled={!editingExp.role} className="px-4 py-2 rounded bg-[#007acc] hover:bg-[#006bb3] text-white font-bold flex items-center gap-1.5">
-                 <Save className="w-4 h-4" />
-                 <span>Save Experience</span>
-               </button>
+                <button onClick={async () => {
+                  await fetch('/api/experience', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(editingExp),
+                  });
+                  onDataChange?.();
+                  setEditingExp(null);
+                  showToast('Experience saved.');
+                  if (onDataChange) onDataChange();
+                }} disabled={!editingExp.role} className="px-4 py-2 rounded bg-[#007acc] hover:bg-[#006bb3] text-white font-bold flex items-center gap-1.5">
+                  <Save className="w-4 h-4" />
+                  <span>Save Experience</span>
+                </button>
              </div>
            </div>
          </div>
@@ -2111,16 +2172,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
              </div>
              <div className="p-4 bg-[#1a1b20] border-t border-[#282a32] flex items-center justify-end gap-2">
                <button onClick={() => setEditingCommunity(null)} className="px-4 py-2 rounded bg-[#25272e] text-gray-300">Cancel</button>
-               <button onClick={() => {
-                 DataStore.saveCommunity(editingCommunity);
-                 setCommunity(DataStore.getCommunity());
-                 setEditingCommunity(null);
-                 showToast('Community project saved.');
-                 if (onDataChange) onDataChange();
-               }} disabled={!editingCommunity.title} className="px-4 py-2 rounded bg-[#5865f2] hover:bg-[#4752c4] text-white font-bold flex items-center gap-1.5">
-                 <Save className="w-4 h-4" />
-                 <span>Save Community Project</span>
-               </button>
+                <button onClick={async () => {
+                  await fetch('/api/community', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(editingCommunity),
+                  });
+                  onDataChange?.();
+                  setEditingCommunity(null);
+                  showToast('Community project saved.');
+                  if (onDataChange) onDataChange();
+                }} disabled={!editingCommunity.title} className="px-4 py-2 rounded bg-[#5865f2] hover:bg-[#4752c4] text-white font-bold flex items-center gap-1.5">
+                  <Save className="w-4 h-4" />
+                  <span>Save Community Project</span>
+                </button>
              </div>
            </div>
          </div>
@@ -2180,13 +2245,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button onClick={() => setEditingLearning(null)} className="px-3 py-1.5 rounded bg-[#25272e] text-gray-300">Cancel</button>
-              <button onClick={() => {
-                DataStore.saveLearningTopic(editingLearning);
-                setLearning(DataStore.getLearningTopics());
-                setEditingLearning(null);
-                showToast('Topic saved.');
-                if (onDataChange) onDataChange();
-              }} disabled={!editingLearning.title} className="px-3 py-1.5 rounded bg-[#23a55a] text-white font-bold">Save Topic</button>
+               <button onClick={async () => {
+                 await fetch('/api/learning', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify(editingLearning),
+                 });
+                 onDataChange?.();
+                 setEditingLearning(null);
+                 showToast('Topic saved.');
+                 if (onDataChange) onDataChange();
+               }} disabled={!editingLearning.title} className="px-3 py-1.5 rounded bg-[#23a55a] text-white font-bold">Save Topic</button>
             </div>
           </div>
         </div>
@@ -2222,9 +2291,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="p-4 bg-[#1a1b20] border-t border-[#282a32] flex items-center justify-between">
               <button onClick={() => setEditingNote(null)} className="px-4 py-2 rounded bg-[#25272e] text-gray-300">Cancel</button>
-              <button onClick={() => {
-                DataStore.saveNote(editingNote);
-                setNotes(DataStore.getNotes());
+              <button onClick={async () => {
+                await fetch('/api/notes', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(editingNote),
+                });
+                onDataChange?.();
                 setEditingNote(null);
                 showToast('Note saved.');
                 if (onDataChange) onDataChange();
@@ -2267,9 +2340,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button onClick={() => setEditingSkill(null)} className="px-3 py-1.5 rounded bg-[#25272e] text-gray-300">Cancel</button>
-              <button onClick={() => {
-                DataStore.saveSkill(editingSkill);
-                setSkills(DataStore.getSkills());
+              <button onClick={async () => {
+                await fetch('/api/skills', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(editingSkill),
+                });
+                onDataChange?.();
                 setEditingSkill(null);
                 showToast('Skill saved.');
                 if (onDataChange) onDataChange();
@@ -2363,9 +2440,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="p-4 bg-[#1a1b20] border-t border-[#282a32] flex items-center justify-end gap-2">
               <button onClick={() => setEditingEducation(null)} className="px-4 py-2 rounded bg-[#25272e] text-gray-300">Cancel</button>
-              <button onClick={() => {
-                DataStore.saveEducation(editingEducation);
-                setEducation(DataStore.getEducation());
+              <button onClick={async () => {
+                await fetch('/api/education', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(editingEducation),
+                });
+                onDataChange?.();
                 setEditingEducation(null);
                 showToast('Education saved.');
                 if (onDataChange) onDataChange();
