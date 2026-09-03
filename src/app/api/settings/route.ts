@@ -7,8 +7,15 @@ export async function GET() {
     if (!db) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
-    const settings = await db.collection('settings').findOne({ _id: 'site_settings' } as any);
-    return NextResponse.json(settings || {});
+    let settings = await db.collection('settings').findOne({ _id: 'site_settings' } as any);
+    if (!settings) {
+      settings = await db.collection('settings').findOne({});
+    }
+    if (settings) {
+      const { _id, ...rest } = settings as any;
+      return NextResponse.json({ ...rest, _id: 'site_settings' });
+    }
+    return NextResponse.json({});
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
   }
@@ -27,9 +34,9 @@ export async function POST(request: Request) {
       Object.entries(body).filter(([, value]) => value !== undefined && value !== null && value !== '')
     );
     const updated = { ...(existing || {}), ...cleanedBody, _id: 'site_settings' };
-    await db.collection('settings').replaceOne({ _id: 'site_settings' } as any, updated as any, { upsert: true });
     
     await db.collection('settings').deleteMany({ _id: { $ne: 'site_settings' } } as any);
+    await db.collection('settings').replaceOne({ _id: 'site_settings' } as any, updated as any, { upsert: true });
     
     return NextResponse.json(updated);
   } catch (error) {
