@@ -61,7 +61,7 @@ export default function AdminPage() {
       initialExperience={experience}
       initialCommunity={community}
       initialEducation={education}
-      onClose={() => router.push('/')}}
+      onClose={() => router.push('/')}
       onDataChange={loadData}
     />
   );
