@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { Note } from '@/types';
 
 export async function GET(request: Request) {
@@ -8,16 +8,21 @@ export async function GET(request: Request) {
     const category = searchParams.get('category');
     const slug = searchParams.get('slug');
 
-    let notes = DataStore.getNotes();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    let notes = await db.collection('notes').find({}).toArray();
 
     if (slug) {
-      const note = notes.find(n => n.slug === slug || n.id === slug);
+      const note = notes.find((n: any) => n.slug === slug || n.id === slug);
       if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 });
       return NextResponse.json(note);
     }
 
     if (category) {
-      notes = notes.filter(n => n.category === category);
+      notes = notes.filter((n: any) => n.category === category);
     }
 
     return NextResponse.json(notes);
@@ -49,8 +54,13 @@ export async function POST(request: Request) {
       updatedAt: new Date().toISOString().split('T')[0]
     };
 
-    const saved = DataStore.saveNote(note);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('notes').insertOne(note as any);
+    return NextResponse.json(note, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save note' }, { status: 500 });
   }
@@ -63,7 +73,12 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
-    DataStore.deleteNote(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('notes').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 });

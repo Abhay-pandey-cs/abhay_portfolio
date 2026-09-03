@@ -35,7 +35,7 @@ export async function getDatabase(): Promise<Db | null> {
   if (!clientPromise) return null;
   try {
     const client = await clientPromise;
-    return client.db('abhay_portfolio');
+    return client.db('PORTFOLIO');
   } catch (error) {
     console.error('Failed to connect to MongoDB', error);
     return null;

@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { Achievement } from '@/types';
 
 export async function GET() {
   try {
-    const achievements = DataStore.getAchievements();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+    const achievements = await db.collection('achievements').find({}).toArray();
     return NextResponse.json(achievements);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch achievements' }, { status: 500 });
@@ -28,8 +32,13 @@ export async function POST(request: Request) {
       proofUrl: body.proofUrl || undefined
     };
 
-    const saved = DataStore.saveAchievement(ach);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('achievements').insertOne(ach as any);
+    return NextResponse.json(ach, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save achievement' }, { status: 500 });
   }
@@ -41,7 +50,12 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    DataStore.deleteAchievement(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('achievements').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete achievement' }, { status: 500 });

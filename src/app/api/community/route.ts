@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { CommunityProject } from '@/types';
 
 export async function GET() {
   try {
-    const community = DataStore.getCommunity();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+    const community = await db.collection('community').find({}).toArray();
     return NextResponse.json(community);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch community projects' }, { status: 500 });
@@ -31,8 +35,13 @@ export async function POST(request: Request) {
       photo: body.photo || ''
     };
 
-    const saved = DataStore.saveCommunity(project);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('community').insertOne(project as any);
+    return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save community project' }, { status: 500 });
   }
@@ -44,7 +53,12 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    DataStore.deleteCommunity(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('community').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete community project' }, { status: 500 });

@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server';
-import { DataStore } from '@/lib/storage';
+import { getDatabase } from '@/lib/mongodb';
 import { LearningTopic } from '@/types';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
-    let topics = DataStore.getLearningTopics();
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    let topics = await db.collection('learning').find({}).toArray();
 
     if (category) {
-      topics = topics.filter(t => t.category === category);
+      topics = topics.filter((t: any) => t.category === category);
     }
     return NextResponse.json(topics);
   } catch (error) {
@@ -34,8 +39,13 @@ export async function POST(request: Request) {
       updatedAt: new Date().toISOString().split('T')[0]
     };
 
-    const saved = DataStore.saveLearningTopic(topic);
-    return NextResponse.json(saved, { status: 201 });
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('learning').insertOne(topic as any);
+    return NextResponse.json(topic, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save learning topic' }, { status: 500 });
   }
@@ -48,7 +58,12 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
-    DataStore.deleteLearningTopic(id);
+    const db = await getDatabase();
+    if (!db) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+    }
+
+    await db.collection('learning').deleteOne({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete topic' }, { status: 500 });
