@@ -19,7 +19,7 @@ export const CertificationsSection: React.FC<CertificationsSectionProps> = ({
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-mono text-[#f0b232]">
             <Award className="w-3.5 h-3.5" />
-            <span>CREDENTIALS & KNOWLEDGE</span>
+            <span>CREDENTIALS AND KNOWLEDGE</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Certifications & Validations</h2>
           <p className="text-sm text-gray-400 font-sans max-w-xl">
