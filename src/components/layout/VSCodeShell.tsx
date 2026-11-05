@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { AnimatePresence, m } from 'framer-motion';
 import { 
   Files, 
   Search, 
@@ -8,6 +9,7 @@ import {
   Bug, 
   Shield, 
   Settings as SettingsIcon, 
+  ChevronLeft,
   ChevronRight, 
   ChevronDown, 
   FileCode, 
@@ -28,6 +30,9 @@ import {
 } from 'lucide-react';
 import { Project, Note, SiteSettings } from '@/types';
 import { StatsPanel } from '@/components/StatsPanel';
+import { WorkspaceProgress } from '@/components/layout/WorkspaceProgress';
+import { workspaceSectionVariants } from '@/lib/motion';
+import { workspaceTabs as tabs } from '@/components/layout/workspaceTabs';
 
 interface VSCodeShellProps {
   settings: SiteSettings;
@@ -60,54 +65,221 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
   const [isBackendFolderOpen, setIsBackendFolderOpen] = useState(true);
   const [isDatabaseFolderOpen, setIsDatabaseFolderOpen] = useState(true);
   const [isNotesFolderOpen, setIsNotesFolderOpen] = useState(true);
-  const [highlightedTab, setHighlightedTab] = useState(activeSection);
+  const [editorHeight, setEditorHeight] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const wheelBoundaryDelta = useRef(0);
+  const wheelBoundaryLastAt = useRef(0);
+  const sectionChangeLockUntil = useRef(0);
+  const previousSectionIndex = useRef(Math.max(0, tabs.findIndex((tab) => tab.id === activeSection)));
+  const touchGesture = useRef<{
+    x: number;
+    y: number;
+    startedAt: number;
+    horizontal: boolean;
+    verticalBoundary: 'start' | 'end' | null;
+  } | null>(null);
+  const lastHorizontalWheelAt = useRef(0);
 
-  // Tab mapping for files (logical order)
-  const tabs = [
-    { id: 'overview', title: 'hero-about.tsx', icon: FileCode, color: '#38bdf8' },
-    { id: 'projects', title: 'projects-showcase.tsx', icon: FileCode, color: '#007acc' },
-    { id: 'experience', title: 'experience.tsx', icon: Briefcase, color: '#38bdf8' },
-    { id: 'learning', title: 'learning-roadmap.json', icon: BookOpen, color: '#23a55a' },
-    { id: 'systems', title: 'systems-deepdive.c', icon: Cpu, color: '#f0b232' },
-    { id: 'coding', title: 'coding-profiles.ts', icon: Activity, color: '#007acc' },
-    { id: 'notes', title: 'technical-notes.md', icon: FileText, color: '#c084fc' },
-    { id: 'certifications', title: 'certifications.json', icon: Award, color: '#f0b232' },
-    { id: 'achievements', title: 'achievements.md', icon: Trophy, color: '#23a55a' },
-    { id: 'community', title: 'community-impact.md', icon: Heart, color: '#f43f5e' },
-    { id: 'contact', title: 'contact-socials.env', icon: Mail, color: '#25d366' },
-  ];
+  useEffect(() => {
+    const mobileViewport = window.matchMedia('(max-width: 767px)');
+    const updateSidebarForViewport = () => setIsSidebarOpen(!mobileViewport.matches);
+    updateSidebarForViewport();
+    mobileViewport.addEventListener('change', updateSidebarForViewport);
+    return () => mobileViewport.removeEventListener('change', updateSidebarForViewport);
+  }, []);
 
-  // Scroll-spy: keep the active editor tab in sync with the section in view
+  const handleSelectSection = (sectionId: string) => {
+    onSelectSection(sectionId);
+    if (window.matchMedia('(max-width: 767px)').matches) setIsSidebarOpen(false);
+  };
+
+  const moveSection = (direction: -1 | 1) => {
+    const currentIndex = tabs.findIndex((tab) => tab.id === activeSection);
+    const nextIndex = Math.min(tabs.length - 1, Math.max(0, currentIndex + direction));
+    if (nextIndex !== currentIndex) {
+      sectionChangeLockUntil.current = performance.now() + 620;
+      wheelBoundaryDelta.current = 0;
+      wheelBoundaryLastAt.current = 0;
+      handleSelectSection(tabs[nextIndex].id);
+    }
+  };
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    setHighlightedTab(activeSection);
 
-    const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-section-id]'));
-    if (sections.length === 0) return;
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      setEditorHeight(Math.round(entry.contentRect.height));
+    });
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, []);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]) {
-          const id = visible[0].target.getAttribute('data-section-id');
-          if (id) setHighlightedTab(id);
-        }
-      },
-      { root: container, rootMargin: '0px 0px -55% 0px', threshold: [0.1, 0.5, 1] }
-    );
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-    sections.forEach((s) => observer.observe(s));
-    return () => observer.disconnect();
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || (event.target as HTMLElement).closest('button, a, input, textarea, select, [role="slider"], [data-no-section-swipe]')) {
+        touchGesture.current = null;
+        return;
+      }
+
+      const touch = event.touches[0];
+      const atStart = container.scrollTop <= 2;
+      const atEnd = container.scrollTop + container.clientHeight >= container.scrollHeight - 2;
+      touchGesture.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        startedAt: performance.now(),
+        horizontal: false,
+        verticalBoundary: atStart ? 'start' : atEnd ? 'end' : null,
+      };
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const gesture = touchGesture.current;
+      if (!gesture || event.touches.length !== 1) {
+        touchGesture.current = null;
+        return;
+      }
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - gesture.x;
+      const deltaY = touch.clientY - gesture.y;
+      if (!gesture.horizontal && Math.abs(deltaX) > 14 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+        gesture.horizontal = true;
+      }
+      if (gesture.horizontal && event.cancelable) event.preventDefault();
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      const gesture = touchGesture.current;
+      touchGesture.current = null;
+      const touch = event.changedTouches[0];
+      if (!gesture || !touch) return;
+
+      const deltaX = touch.clientX - gesture.x;
+      const deltaY = touch.clientY - gesture.y;
+      if (!gesture.horizontal) {
+        if (gesture.verticalBoundary === 'end' && deltaY < -110) moveSection(1);
+        else if (gesture.verticalBoundary === 'start' && deltaY > 110) moveSection(-1);
+        return;
+      }
+
+      const elapsed = Math.max(1, performance.now() - gesture.startedAt);
+      const distance = Math.abs(deltaX);
+      const horizontalDominates = distance > Math.abs(deltaY) * 1.5;
+      const isIntentionalSwipe = distance >= 72 || (distance >= 48 && distance / elapsed > 0.55);
+      if (!horizontalDominates || !isIntentionalSwipe) return;
+
+      moveSection(deltaX < 0 ? 1 : -1);
+    };
+
+    const handleTouchCancel = () => {
+      touchGesture.current = null;
+    };
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchCancel, { passive: true });
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchCancel);
+    };
   }, [activeSection]);
+
+  const handleWorkspaceWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(event.deltaX) >= 24 && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+      event.preventDefault();
+      const now = performance.now();
+      if (now - lastHorizontalWheelAt.current < 420) return;
+      lastHorizontalWheelAt.current = now;
+      moveSection(event.deltaX > 0 ? 1 : -1);
+      return;
+    }
+
+    if (!event.deltaY) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const deltaMultiplier = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? container.clientHeight
+        : 1;
+    const scaledDelta = Math.sign(event.deltaY) * Math.min(Math.abs(event.deltaY * deltaMultiplier) * 0.55, 64);
+    const scrollingDown = scaledDelta > 0;
+
+    let nestedScroller = (event.target as HTMLElement).parentElement;
+    while (nestedScroller && nestedScroller !== container) {
+      const { overflowY } = window.getComputedStyle(nestedScroller);
+      const canScroll = /(auto|scroll|overlay)/.test(overflowY) &&
+        nestedScroller.scrollHeight > nestedScroller.clientHeight + 1;
+      if (canScroll) {
+        const nestedAtBoundary = scrollingDown
+          ? nestedScroller.scrollTop + nestedScroller.clientHeight >= nestedScroller.scrollHeight - 2
+          : nestedScroller.scrollTop <= 2;
+        if (!nestedAtBoundary) {
+          event.preventDefault();
+          nestedScroller.scrollTop += scaledDelta;
+          wheelBoundaryDelta.current = 0;
+          wheelBoundaryLastAt.current = 0;
+          return;
+        }
+      }
+      nestedScroller = nestedScroller.parentElement;
+    }
+
+    const atBoundary = scrollingDown
+      ? container.scrollTop + container.clientHeight >= container.scrollHeight - 2
+      : container.scrollTop <= 2;
+    if (!atBoundary) {
+      event.preventDefault();
+      container.scrollTop += scaledDelta;
+      wheelBoundaryDelta.current = 0;
+      wheelBoundaryLastAt.current = 0;
+      return;
+    }
+
+    event.preventDefault();
+    if (performance.now() < sectionChangeLockUntil.current) return;
+    const direction = scrollingDown ? 1 : -1;
+    const now = performance.now();
+    if (now - wheelBoundaryLastAt.current > 650) wheelBoundaryDelta.current = 0;
+    wheelBoundaryDelta.current =
+      Math.sign(wheelBoundaryDelta.current) === direction
+        ? wheelBoundaryDelta.current + scaledDelta
+        : scaledDelta;
+    wheelBoundaryLastAt.current = now;
+    if (Math.abs(wheelBoundaryDelta.current) >= 320) moveSection(direction);
+  };
+
+  const handleWorkspaceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (event.target !== event.currentTarget && !event.altKey) return;
+    event.preventDefault();
+    moveSection(event.key === 'ArrowRight' ? 1 : -1);
+  };
+
+  const activeSectionIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeSection));
+  const sectionDirection = activeSectionIndex >= previousSectionIndex.current ? 1 : -1;
+
+  useLayoutEffect(() => {
+    previousSectionIndex.current = activeSectionIndex;
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeSectionIndex]);
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col bg-[#121316] text-[#cccccc] font-sans selection:bg-[#007acc]/30">
       {/* Main Split Body */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="relative flex-1 flex overflow-hidden min-h-0">
         {/* LEFT ACTIVITY BAR */}
         <div className="w-12 bg-[#18191d] border-r border-[#2b2d35] flex flex-col items-center justify-between py-3 z-20 shrink-0">
           <div className="flex flex-col items-center gap-4">
@@ -130,7 +302,7 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectSection('overview')}
+              onClick={() => handleSelectSection('overview')}
               className="p-2 rounded-lg text-gray-400 hover:text-white transition-colors"
               title="Source Control (Git main)"
             >
@@ -138,7 +310,7 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectSection('systems')}
+              onClick={() => handleSelectSection('systems')}
               className="p-2 rounded-lg text-gray-400 hover:text-white transition-colors"
               title="Systems & Debugger"
             >
@@ -174,7 +346,7 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectSection('contact')}
+              onClick={() => handleSelectSection('contact')}
               className="p-2 rounded-lg text-gray-400 hover:text-white transition-colors"
               title="Settings & Contact"
             >
@@ -185,38 +357,38 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
 
         {/* EXPLORER SIDEBAR */}
         {isSidebarOpen && (
-          <div className="w-60 bg-[#16171b] border-r border-[#272930] flex flex-col text-xs font-mono select-none shrink-0 overflow-y-auto">
+          <div className="absolute left-12 top-0 bottom-0 z-30 w-60 bg-[#16171b] border-r border-[#272930] flex flex-col text-xs font-mono select-none shrink-0 overflow-y-auto shadow-xl md:relative md:inset-auto md:z-auto md:shadow-none">
             <div className="h-9 px-3 flex items-center justify-between uppercase tracking-wider text-[11px] font-bold text-gray-400 border-b border-[#22242a]">
               <span>EXPLORER: ABHAY_PORTFOLIO</span>
             </div>
 
             <div className="p-2 space-y-1">
               <button
-                onClick={() => onSelectSection('overview')}
+                onClick={() => handleSelectSection('overview')}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                  highlightedTab === 'overview' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                  activeSection === 'overview' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                 }`}
               >
                 <FileCode className="w-4 h-4 text-[#38bdf8]" />
                 <span>hero-about.tsx</span>
               </button>
 
-              {/* Frontend Folder */}
+              {/* Projects and contact */}
               <div>
                 <div
                   onClick={() => setIsFrontendFolderOpen(!isFrontendFolderOpen)}
                   className="flex items-center gap-1.5 px-1 py-1 text-gray-400 hover:text-white cursor-pointer"
                 >
                   {isFrontendFolderOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  <span className="font-semibold text-[11px]">📁 frontend/</span>
+                  <span className="font-semibold text-[11px]">📁 Projects & Contact</span>
                 </div>
 
                 {isFrontendFolderOpen && (
                   <div className="pl-4 space-y-0.5">
                     <button
-                      onClick={() => onSelectSection('projects')}
+                      onClick={() => handleSelectSection('projects')}
                       className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
-                        highlightedTab === 'projects' ? 'bg-[#007acc]/20 text-[#38bdf8]' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'projects' ? 'bg-[#007acc]/20 text-[#38bdf8]' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <FileCode className="w-3.5 h-3.5 text-[#007acc]" />
@@ -236,9 +408,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                     ))}
 
                     <button
-                      onClick={() => onSelectSection('contact')}
+                      onClick={() => handleSelectSection('contact')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'contact' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'contact' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Mail className="w-4 h-4 text-[#25d366]" />
@@ -248,22 +420,22 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                 )}
               </div>
 
-              {/* Backend Folder */}
+              {/* Experience and engineering */}
               <div>
                 <div
                   onClick={() => setIsBackendFolderOpen(!isBackendFolderOpen)}
                   className="flex items-center gap-1.5 px-1 py-1 text-gray-400 hover:text-white cursor-pointer"
                 >
                   {isBackendFolderOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  <span className="font-semibold text-[11px]">📁 backend/</span>
+                  <span className="font-semibold text-[11px]">📁 Experience & Engineering</span>
                 </div>
 
                 {isBackendFolderOpen && (
                   <div className="pl-4 space-y-0.5">
                     <button
-                      onClick={() => onSelectSection('experience')}
+                      onClick={() => handleSelectSection('experience')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'experience' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'experience' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Briefcase className="w-4 h-4 text-[#38bdf8]" />
@@ -271,9 +443,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onSelectSection('learning')}
+                      onClick={() => handleSelectSection('learning')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'learning' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'learning' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <BookOpen className="w-4 h-4 text-[#23a55a]" />
@@ -281,9 +453,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onSelectSection('systems')}
+                      onClick={() => handleSelectSection('systems')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'systems' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'systems' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Cpu className="w-4 h-4 text-[#f0b232]" />
@@ -291,9 +463,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onSelectSection('coding')}
+                      onClick={() => handleSelectSection('coding')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'coding' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'coding' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Activity className="w-4 h-4 text-[#007acc]" />
@@ -303,22 +475,22 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                 )}
               </div>
 
-              {/* Database Folder */}
+              {/* Credentials and recognition */}
               <div>
                 <div
                   onClick={() => setIsDatabaseFolderOpen(!isDatabaseFolderOpen)}
                   className="flex items-center gap-1.5 px-1 py-1 text-gray-400 hover:text-white cursor-pointer"
                 >
                   {isDatabaseFolderOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  <span className="font-semibold text-[11px]">📁 database/</span>
+                  <span className="font-semibold text-[11px]">📁 Awards & Credentials</span>
                 </div>
 
                 {isDatabaseFolderOpen && (
                   <div className="pl-4 space-y-0.5">
                     <button
-                      onClick={() => onSelectSection('certifications')}
+                      onClick={() => handleSelectSection('certifications')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'certifications' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'certifications' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Award className="w-4 h-4 text-[#f0b232]" />
@@ -326,9 +498,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onSelectSection('achievements')}
+                      onClick={() => handleSelectSection('achievements')}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                        highlightedTab === 'achievements' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'achievements' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Trophy className="w-4 h-4 text-[#23a55a]" />
@@ -351,9 +523,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                 {isNotesFolderOpen && (
                   <div className="pl-4 space-y-0.5">
                     <button
-                      onClick={() => onSelectSection('notes')}
+                      onClick={() => handleSelectSection('notes')}
                       className={`w-full flex items-center gap-2 px-2 py-1 rounded transition-colors text-left ${
-                        highlightedTab === 'notes' ? 'bg-[#007acc]/20 text-[#38bdf8]' : 'text-gray-300 hover:bg-[#202228]'
+                        activeSection === 'notes' ? 'bg-[#007acc]/20 text-[#38bdf8]' : 'text-gray-300 hover:bg-[#202228]'
                       }`}
                     >
                       <Terminal className="w-3.5 h-3.5 text-[#c084fc]" />
@@ -363,7 +535,7 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
                     {notes.map((n) => (
                       <button
                         key={n.id}
-                        onClick={() => onSelectSection('notes')}
+                        onClick={() => handleSelectSection('notes')}
                         className="w-full flex items-center gap-2 px-2 py-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#202228] text-left truncate"
                         title={n.title}
                       >
@@ -376,9 +548,9 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
               </div>
 
               <button
-                onClick={() => onSelectSection('community')}
+                onClick={() => handleSelectSection('community')}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors text-left ${
-                  highlightedTab === 'community' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
+                  activeSection === 'community' ? 'bg-[#007acc]/20 text-[#38bdf8] font-semibold' : 'text-gray-300 hover:bg-[#202228]'
                 }`}
               >
                 <Heart className="w-4 h-4 text-[#f43f5e]" />
@@ -390,7 +562,7 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
 
         {/* STATS PANEL (inline when stats sidebar is open) */}
         {isStatsOpen && (
-          <div className="w-72 bg-[#16171b] border-l border-[#272930] flex flex-col overflow-y-auto shrink-0">
+          <div className="absolute right-0 top-0 bottom-0 z-30 w-72 bg-[#16171b] border-l border-[#272930] flex flex-col overflow-y-auto shadow-xl md:relative md:inset-auto md:z-auto md:shadow-none">
             <div className="h-9 px-3 flex items-center gap-2 uppercase tracking-wider text-[11px] font-bold text-gray-400 border-b border-[#22242a]">
               <Activity className="w-4 h-4 text-[#5865f2]" />
               <span>STATS</span>
@@ -401,45 +573,87 @@ export const VSCodeShell: React.FC<VSCodeShellProps> = ({
 
         {/* WORKSPACE & EDITOR CANVAS */}
         <div className="flex-1 flex flex-col bg-[#121316] overflow-hidden min-h-0">
-          {/* Top Open Tabs Bar */}
-          <div className="h-9 bg-[#18191d] border-b border-[#25272e] flex items-center overflow-x-auto scrollbar-none select-none">
-            {tabs.map((tab) => {
-              const isActive = highlightedTab === tab.id;
-              const Icon = tab.icon;
-
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => onSelectSection(tab.id)}
-                  className={`h-full px-3.5 flex items-center gap-2 text-xs font-mono border-r border-[#25272e] transition-colors ${
-                    isActive
-                      ? 'bg-[#121316] text-white font-medium border-t-2 border-t-[#007acc]'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#1f2026]'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" style={{ color: tab.color }} />
-                  <span>{tab.title}</span>
-                </button>
-              );
-            })}
-          </div>
-
           {/* Breadcrumbs */}
-          <div className="h-6 bg-[#141518] px-4 flex items-center gap-1.5 text-[11px] font-mono text-gray-400 border-b border-[#22242a]">
+          <div className="h-9 shrink-0 bg-[#141518] px-2 sm:px-4 flex items-center gap-1.5 text-[11px] font-mono text-gray-400 border-b border-[#22242a]">
             <span>abhay-portfolio</span>
             <span>›</span>
             <span>src</span>
             <span>›</span>
             <span>sections</span>
             <span>›</span>
-            <span className="text-gray-200">{tabs.find(t => t.id === highlightedTab)?.title || 'overview'}</span>
+            <span className="min-w-0 flex-1 truncate text-gray-200">{tabs.find(t => t.id === activeSection)?.title || 'overview'}</span>
+            <WorkspaceProgress scrollRef={scrollContainerRef} activeSection={activeSection} />
           </div>
 
-           {/* Render Active Children Section */}
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-6 bg-[#121316]">
-            <div style={{ zoom: 0.95 }} className="min-h-full">
-              {children}
+          {/* Each section has its own vertical reading area; boundary scrolling advances the page. */}
+          <div className="relative flex-1 min-h-0 overflow-hidden bg-[#121316]">
+            <div
+              ref={scrollContainerRef}
+              data-workspace-editor
+              tabIndex={0}
+              onWheelCapture={handleWorkspaceWheel}
+              onKeyDown={handleWorkspaceKeyDown}
+              className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain overscroll-x-none touch-pan-y px-12 py-6 sm:px-16 lg:px-20"
+              style={{ touchAction: 'pan-y pinch-zoom', overscrollBehaviorX: 'none' }}
+            >
+              <AnimatePresence mode="wait" initial={false} custom={sectionDirection}>
+                <m.div
+                  key={activeSection}
+                  custom={sectionDirection}
+                  variants={workspaceSectionVariants}
+                  initial="initial"
+                  animate="enter"
+                  exit="exit"
+                  className="min-h-full"
+                  style={editorHeight ? { minHeight: editorHeight } : undefined}
+                >
+                  {children}
+                  <div className="flex min-h-[72vh] items-center justify-center px-6 pb-8 pt-12 text-center">
+                    <div className="max-w-sm">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                        {activeSectionIndex < tabs.length - 1 ? 'End of section' : 'End of portfolio'}
+                      </p>
+                      {activeSectionIndex < tabs.length - 1 ? (
+                        <>
+                          <p className="mt-2 text-sm text-gray-300">
+                            When you&apos;re ready, scroll a few times or choose Continue.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => moveSection(1)}
+                            className="mt-3 rounded-md border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-[#38bdf8]/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8]"
+                          >
+                            Continue to {tabs[activeSectionIndex + 1].title}
+                          </button>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-sm text-gray-400">You have reached the last section.</p>
+                      )}
+                    </div>
+                  </div>
+                </m.div>
+              </AnimatePresence>
             </div>
+            <button
+              type="button"
+              onClick={() => moveSection(-1)}
+              disabled={activeSection === tabs[0].id}
+              aria-label="Previous workspace section"
+              title="Previous section (Alt + Left)"
+              className="absolute left-2 top-1/2 z-10 inline-flex h-12 w-10 -translate-y-1/2 items-center justify-center rounded-lg border border-white/15 bg-[#1a1b1f]/95 text-gray-200 shadow-lg transition-colors hover:border-[#38bdf8]/60 hover:bg-[#252a31] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moveSection(1)}
+              disabled={activeSection === tabs[tabs.length - 1].id}
+              aria-label="Next workspace section"
+              title="Next section (Alt + Right)"
+              className="absolute right-2 top-1/2 z-10 inline-flex h-12 w-10 -translate-y-1/2 items-center justify-center rounded-lg border border-white/15 bg-[#1a1b1f]/95 text-gray-200 shadow-lg transition-colors hover:border-[#38bdf8]/60 hover:bg-[#252a31] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
           </div>
         </div>
       </div>

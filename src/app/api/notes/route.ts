@@ -59,7 +59,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    await db.collection('notes').insertOne(note as any);
+    const collection = db.collection('notes');
+    const existing = await collection.findOne({ id: note.id });
+    if (existing) {
+      await collection.replaceOne({ _id: existing._id } as any, note as any);
+      await collection.deleteMany({ id: note.id, _id: { $ne: existing._id } } as any);
+      return NextResponse.json(note);
+    }
+
+    await collection.insertOne(note as any);
     return NextResponse.json(note, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save note' }, { status: 500 });
@@ -78,7 +86,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    await db.collection('notes').deleteOne({ id });
+    await db.collection('notes').deleteMany({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 });

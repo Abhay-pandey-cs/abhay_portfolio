@@ -39,9 +39,9 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {achievements.map((ach) => (
+        {achievements.map((ach, index) => (
           <div
-            key={ach.id}
+            key={`${ach.id}-${index}`}
             className="p-5 rounded-xl bg-[#18191d] border border-[#2e3038] hover:border-[#23a55a]/50 shadow-lg transition-all duration-200 flex flex-col justify-between space-y-3 group hover:-translate-y-1"
           >
             <div className="space-y-2.5">

@@ -1,198 +1,402 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
-import { Upload, Link as LinkIcon, Trash2, ZoomIn, ZoomOut, Crop } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Crop, Link as LinkIcon, RotateCcw, Trash2, Upload } from 'lucide-react';
 
 interface ImageUploadProps {
   label?: string;
   value?: string;
   onChange: (url: string) => void;
   placeholder?: string;
+  aspectRatio?: number;
+  outputWidth?: number;
 }
+
+interface Position {
+  x: number;
+  y: number;
+}
+
+interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+interface PointerDrag {
+  pointerId: number;
+  clientX: number;
+  clientY: number;
+  position: Position;
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
   label = 'Image',
   value = '',
   onChange,
   placeholder = 'https://... or upload file',
+  aspectRatio = 1,
+  outputWidth = 720,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const pointerDragRef = useRef<PointerDrag | null>(null);
+  const [source, setSource] = useState(value);
+  const [imageDimensions, setImageDimensions] = useState<ImageDimensions | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [showControls, setShowControls] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState<Position>({ x: 0, y: 0 });
+  const [isCropping, setIsCropping] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [error, setError] = useState('');
+  const safeAspectRatio = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
+  const canCrop = source.startsWith('blob:') || source.startsWith('data:');
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        onChange(reader.result);
-        setZoom(1);
-        setPosition({ x: 0, y: 0 });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Auto-show controls when an image is set
   useEffect(() => {
-    setShowControls(!!value);
+    setSource(value);
+    setImageDimensions(null);
+    setZoom(1);
+    setPosition({ x: 0, y: 0 });
+    setIsCropping(false);
+    setError('');
   }, [value]);
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.1, 3));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.1, 0.5));
-  const handleZoomReset = () => setZoom(1);
+  useEffect(
+    () => () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    },
+    [],
+  );
 
-  const handleCrop = () => {
-    if (!canvasRef.current || !imgRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const constrainedPosition = (next: Position, nextZoom = zoom): Position => {
+    const preview = previewRef.current;
+    const image = imageRef.current;
+    if (!preview || !image?.naturalWidth || !image.naturalHeight) return next;
 
-    // Set canvas to image natural dimensions
-    canvas.width = imgRef.current.naturalWidth;
-    canvas.height = imgRef.current.naturalHeight;
+    const { width, height } = preview.getBoundingClientRect();
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * nextZoom;
+    const maxX = Math.max(0, (image.naturalWidth * scale - width) / 2);
+    const maxY = Math.max(0, (image.naturalHeight * scale - height) / 2);
 
-    // Clear and draw
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(imgRef.current, 0, 0, canvas.width, canvas.height);
-
-    // Get cropped data URL
-    const croppedDataUrl = canvas.toDataURL('image/png');
-    onChange(croppedDataUrl);
-    setShowControls(false);
+    return {
+      x: clamp(next.x, -maxX, maxX),
+      y: clamp(next.y, -maxY, maxY),
+    };
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  const releaseObjectUrl = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
     }
   };
 
-  const handleMouseUp = () => {
+  const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Choose an image file to continue.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Choose an image smaller than 10 MB.');
+      return;
+    }
+
+    releaseObjectUrl();
+    const objectUrl = URL.createObjectURL(file);
+    objectUrlRef.current = objectUrl;
+    setSource(objectUrl);
+    setImageDimensions(null);
+    setZoom(1);
+    setPosition({ x: 0, y: 0 });
+    setIsCropping(true);
+    setError('');
+  };
+
+  const handleZoomChange = (nextZoom: number) => {
+    const boundedZoom = clamp(nextZoom, 1, 4);
+    setZoom(boundedZoom);
+    setPosition((current) => constrainedPosition(current, boundedZoom));
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isCropping) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointerDragRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      position,
+    };
+    setIsDragging(true);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    setPosition(
+      constrainedPosition({
+        x: drag.position.x + event.clientX - drag.clientX,
+        y: drag.position.y + event.clientY - drag.clientY,
+      }),
+    );
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (pointerDragRef.current?.pointerId !== event.pointerId) return;
+    pointerDragRef.current = null;
     setIsDragging(false);
   };
 
+  const previewBounds = previewRef.current?.getBoundingClientRect();
+  const previewScale = imageDimensions && previewBounds
+    ? Math.max(previewBounds.width / imageDimensions.width, previewBounds.height / imageDimensions.height) * zoom
+    : zoom;
+
+  const handleCrop = () => {
+    const image = imageRef.current;
+    const preview = previewRef.current;
+    if (!image?.naturalWidth || !image.naturalHeight || !preview) {
+      setError('Wait for the image preview to finish loading, then try again.');
+      return;
+    }
+
+    const { width, height } = preview.getBoundingClientRect();
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * zoom;
+    const sourceWidth = width / scale;
+    const sourceHeight = height / scale;
+    const cropX = clamp(
+      (image.naturalWidth - sourceWidth) / 2 - position.x / scale,
+      0,
+      image.naturalWidth - sourceWidth,
+    );
+    const cropY = clamp(
+      (image.naturalHeight - sourceHeight) / 2 - position.y / scale,
+      0,
+      image.naturalHeight - sourceHeight,
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(outputWidth);
+    canvas.height = Math.round(outputWidth / safeAspectRatio);
+
+    try {
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Image crop is unavailable in this browser.');
+
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(
+        image,
+        cropX,
+        cropY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+
+      const croppedImage = canvas.toDataURL('image/webp', 0.9);
+      onChange(croppedImage);
+      releaseObjectUrl();
+      setSource(croppedImage);
+      setIsCropping(false);
+      setError('');
+    } catch (cropError) {
+      console.error('Image crop failed:', cropError);
+      setError(cropError instanceof Error ? cropError.message : 'Could not crop this image. Upload the image file and try again.');
+    }
+  };
+
+  const handleCancelCrop = () => {
+    releaseObjectUrl();
+    setSource(value);
+    setZoom(1);
+    setPosition({ x: 0, y: 0 });
+    setIsCropping(false);
+    setError('');
+  };
+
+  const handleRemove = () => {
+    releaseObjectUrl();
+    setSource('');
+    setZoom(1);
+    setPosition({ x: 0, y: 0 });
+    setIsCropping(false);
+    setError('');
+    onChange('');
+  };
+
   return (
-    <div className="space-y-1.5">
-      <label className="text-gray-400">{label}</label>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 relative">
-            <LinkIcon className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+    <div className="space-y-3">
+      <label className="block text-xs font-medium text-gray-300">{label}</label>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1">
+            <LinkIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
             <input
-              type="text"
+              type="url"
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(event) => {
+                releaseObjectUrl();
+                setError('');
+                onChange(event.target.value);
+              }}
               placeholder={placeholder}
-              className="w-full pl-8 pr-3 py-2 rounded bg-[#141518] border border-[#2e3038] text-white text-xs"
+              className="w-full rounded-lg border border-[#343843] bg-[#111216] py-2.5 pl-8 pr-3 text-xs text-white outline-none transition-colors focus:border-[#38bdf8]"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="px-3 py-2 rounded bg-[#25272e] hover:bg-[#2e313b] text-gray-200 border border-[#383a42] text-xs flex items-center gap-1.5"
-            title="Upload image"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Upload</span>
-          </button>
-          {value && (
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => onChange('')}
-              className="px-2 py-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"
-              title="Remove image"
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#3b4350] bg-[#252932] px-3 py-2 text-xs text-gray-100 transition-colors hover:border-[#38bdf8] hover:bg-[#2b303a]"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Upload className="h-3.5 w-3.5" />
+              Upload & crop
             </button>
-          )}
+            {value && (
+              <button
+                type="button"
+                onClick={handleRemove}
+                className="inline-flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-300 transition-colors hover:bg-red-500/20"
+                aria-label={`Remove ${label.toLowerCase()}`}
+                title="Remove image"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
+
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-        {value && (
-          <div className="space-y-2">
-            {/* Preview with zoom and pan */}
-            <div
-              className="relative h-40 w-full rounded border border-[#2e3038] bg-black/20 overflow-hidden flex items-center justify-center cursor-move"
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            >
-              <img
-                ref={imgRef}
-                src={value}
-                alt="Preview"
-                className="max-w-full max-h-full object-contain pointer-events-none"
-                style={{
-                  transform: `scale(${zoom}) translate(${position.x}px, ${position.y}px)`,
-                  transformOrigin: 'center',
-                  transition: isDragging ? 'none' : 'transform 0.1s ease',
-                }}
-              />
+
+        {source && (
+          <div className="grid gap-4 rounded-xl border border-[#2e3038] bg-[#131419] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0 space-y-2">
+              <div
+                ref={previewRef}
+                className={`relative mx-auto w-full max-w-[360px] overflow-hidden rounded-lg border border-[#39404b] bg-[#0b0c0f] ${
+                  isCropping ? 'cursor-grab touch-none' : ''
+                } ${isDragging ? 'cursor-grabbing' : ''}`}
+                style={{ aspectRatio: String(safeAspectRatio) }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  ref={imageRef}
+                  src={source}
+                  alt={`${label} preview`}
+                  onLoad={(event) => {
+                    setImageDimensions({
+                      width: event.currentTarget.naturalWidth,
+                      height: event.currentTarget.naturalHeight,
+                    });
+                    setError('');
+                  }}
+                  onError={() => setError('This image could not be loaded. Check its URL or upload the file instead.')}
+                  draggable={false}
+                  className="absolute left-1/2 top-1/2 max-h-none max-w-none select-none"
+                  style={{
+                    width: imageDimensions ? imageDimensions.width * previewScale : '100%',
+                    height: imageDimensions ? imageDimensions.height * previewScale : '100%',
+                    transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
+                    transition: isDragging ? 'none' : 'width 120ms ease-out, height 120ms ease-out',
+                  }}
+                />
+                {isCropping && safeAspectRatio === 1 && (
+                  <div className="pointer-events-none absolute inset-[8%] rounded-full border border-white/50 shadow-[0_0_0_999px_rgba(0,0,0,0.12)]" />
+                )}
+              </div>
+              <p className="text-center text-[10px] text-gray-500">
+                {isCropping ? 'Drag to position the image inside the crop frame.' : 'Preview uses the final image framing.'}
+              </p>
             </div>
 
-            {/* Hidden canvas for cropping */}
-            <canvas ref={canvasRef} className="hidden" />
-
-            {/* Edit Controls */}
-            {showControls && (
-              <div className="flex items-center justify-between p-2 bg-[#141518] rounded border border-[#2e3038]">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleZoomOut}
-                    className="p-1.5 rounded bg-[#25272e] hover:bg-[#2e313b] text-gray-200 border border-[#383a42]"
-                    title="Zoom out"
-                  >
-                    <ZoomOut className="w-4 h-4" />
-                  </button>
-                  <span className="text-xs font-mono text-gray-400 min-w-[50px] text-center">
-                    {Math.round(zoom * 100)}%
+            {isCropping ? (
+              <div className="flex flex-col gap-3 sm:min-w-[180px]">
+                <label className="space-y-2 text-[10px] text-gray-400">
+                  <span className="flex items-center justify-between font-mono">
+                    <span>ZOOM</span>
+                    <span>{Math.round(zoom * 100)}%</span>
                   </span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="4"
+                    step="0.01"
+                    value={zoom}
+                    onChange={(event) => handleZoomChange(Number(event.target.value))}
+                    className="w-full accent-[#38bdf8]"
+                    aria-label="Crop zoom"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZoom(1);
+                    setPosition({ x: 0, y: 0 });
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#343843] px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-[#252932]"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset framing
+                </button>
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={handleZoomIn}
-                    className="p-1.5 rounded bg-[#25272e] hover:bg-[#2e313b] text-gray-200 border border-[#383a42]"
-                    title="Zoom in"
+                    onClick={handleCancelCrop}
+                    className="flex-1 rounded-lg border border-[#343843] px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-[#252932]"
                   >
-                    <ZoomIn className="w-4 h-4" />
+                    Cancel
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleZoomReset}
-                    className="px-2 py-1.5 rounded bg-[#25272e] hover:bg-[#2e313b] text-gray-200 text-xs font-mono border border-[#383a42]"
-                    title="Reset zoom"
-                  >
-                    Reset
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-gray-400">Drag to position</span>
                   <button
                     type="button"
                     onClick={handleCrop}
-                    className="px-3 py-1.5 rounded bg-[#5865f2] hover:bg-[#4752c4] text-white text-xs font-mono font-bold flex items-center gap-1.5"
-                    title="Apply crop"
+                    disabled={!canCrop}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5865f2] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <Crop className="w-3.5 h-3.5" />
-                    <span>Apply Crop</span>
+                    <Crop className="h-3.5 w-3.5" />
+                    Apply
                   </button>
                 </div>
+                {!canCrop && (
+                  <p className="text-[10px] text-amber-300">
+                    Upload the image file to crop it. External image URLs may block browser cropping.
+                  </p>
+                )}
               </div>
+            ) : canCrop ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCropping(true);
+                  setError('');
+                }}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#3b4350] px-3 py-2 text-xs text-gray-200 transition-colors hover:border-[#38bdf8]"
+              >
+                <Crop className="h-3.5 w-3.5" />
+                Adjust crop
+              </button>
+            ) : (
+              <p className="max-w-[200px] text-[10px] text-gray-500">
+                To adjust framing, upload the image file so the browser can crop it safely.
+              </p>
             )}
           </div>
         )}
+
+        {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
       </div>
     </div>
   );

@@ -40,7 +40,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    await db.collection('community').insertOne(project as any);
+    const collection = db.collection('community');
+    const existing = await collection.findOne({ id: project.id });
+    if (existing) {
+      await collection.replaceOne({ _id: existing._id } as any, project as any);
+      await collection.deleteMany({ id: project.id, _id: { $ne: existing._id } } as any);
+      return NextResponse.json(project);
+    }
+
+    await collection.insertOne(project as any);
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save community project' }, { status: 500 });
@@ -58,7 +66,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    await db.collection('community').deleteOne({ id });
+    await db.collection('community').deleteMany({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete community project' }, { status: 500 });

@@ -134,6 +134,7 @@ export const CaseStudyModal: React.FC<CaseStudyModalProps> = ({
           {/* Interactive Architecture Flow Diagram */}
           <InteractiveArchitecture
             nodes={project.architectureNodes}
+            technologies={project.technologies}
             description={project.architectureDescription}
           />
 

@@ -33,10 +33,12 @@ import {
   Trophy,
   Briefcase,
   Heart,
-  GraduationCap
+  GraduationCap,
+  LogOut
 } from 'lucide-react';
 import { MongoIcon, LeetCodeIcon, CodeChefIcon, GithubIcon, LinkedinIcon } from '@/components/icons/BrandIcons';
 import { ImageUpload } from '@/components/admin/ImageUpload';
+import { ProfilePhoto } from '@/components/ProfilePhoto';
 import { 
   Project, 
   LearningTopic, 
@@ -48,9 +50,46 @@ import {
   Achievement,
   Experience,
   EducationItem,
-  CommunityProject
+  CommunityProject,
+  DocumentationContent,
+  defaultDocumentationContent,
 } from '@/types';
 import { DataStore } from '@/lib/storage';
+
+const documentationFields: Array<{
+  key: keyof DocumentationContent;
+  label: string;
+  multiline?: boolean;
+}> = [
+  { key: 'brandSuffix', label: 'Brand suffix' },
+  { key: 'docsNavigation', label: 'Docs navigation label' },
+  { key: 'architectureNavigation', label: 'Architecture navigation label' },
+  { key: 'projectsNavigation', label: 'Projects navigation label' },
+  { key: 'workspaceNavigation', label: 'Workspace navigation label' },
+  { key: 'eyebrow', label: 'Documentation eyebrow' },
+  { key: 'title', label: 'Main title', multiline: true },
+  { key: 'description', label: 'Introduction (supports {name})', multiline: true },
+  { key: 'projectsAction', label: 'Projects button' },
+  { key: 'workspaceAction', label: 'Workspace button' },
+  { key: 'featuredLabel', label: 'Featured project label' },
+  { key: 'caseStudyAction', label: 'Case study button' },
+  { key: 'emptyFeaturedTitle', label: 'Featured project empty title' },
+  { key: 'emptyFeaturedDescription', label: 'Featured project empty description', multiline: true },
+  { key: 'projectsMetricLabel', label: 'Projects metric label' },
+  { key: 'technologiesMetricLabel', label: 'Technologies metric label' },
+  { key: 'notesMetricLabel', label: 'Notes metric label' },
+  { key: 'projectsEndpoint', label: 'Projects index label' },
+  { key: 'projectsFallback', label: 'Projects index fallback' },
+  { key: 'skillsEndpoint', label: 'Skills index label' },
+  { key: 'skillsFallback', label: 'Skills index fallback' },
+  { key: 'architectureEndpoint', label: 'Architecture index label' },
+  { key: 'architectureFallback', label: 'Architecture index fallback' },
+  { key: 'notesAction', label: 'Notes index action' },
+  { key: 'notesTitle', label: 'Notes index title' },
+  { key: 'footerHint', label: 'Footer scroll hint' },
+  { key: 'reducedMotionFooterHint', label: 'Reduced-motion footer hint' },
+  { key: 'footerAction', label: 'Footer button' },
+];
 
 interface AdminPanelProps {
   initialProjects: Project[];
@@ -64,7 +103,7 @@ interface AdminPanelProps {
   initialCommunity?: CommunityProject[];
   initialEducation?: EducationItem[];
   onClose?: () => void;
-  onDataChange?: () => void;
+  onDataChange?: () => void | Promise<void>;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -81,13 +120,69 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onClose,
   onDataChange,
 }) => {
-  // Auth state
+  // Auth state - using cookie-based auth
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passcode, setPasscode] = useState('');
+  const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [passcode, setPasscode] = useState('');
 
   // Active admin tab
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'experience' | 'certifications' | 'achievements' | 'learning' | 'notes' | 'skills' | 'community' | 'education' | 'database' | 'settings'>('overview');
+
+  // Check auth status on mount
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch('/api/auth', { credentials: 'include' });
+      const data = await res.json();
+      if (data.authenticated) {
+        setIsAuthenticated(true);
+      }
+    } catch (e) {
+      console.error('Auth check failed:', e);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ passcode }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setIsAuthenticated(true);
+        showToast('Admin session authenticated successfully');
+      } else {
+        setAuthError(data.error || 'Incorrect passcode. Contact the site owner for access.');
+      }
+    } catch (e) {
+      setAuthError('Authentication failed. Please try again.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth', { method: 'DELETE', credentials: 'include' });
+      setIsAuthenticated(false);
+      setPasscode('');
+      showToast('Logged out successfully');
+    } catch (e) {
+      showToast('Logout failed');
+    }
+  };
 
   // Live state
   const [projects, setProjects] = useState<Project[]>([]);
@@ -118,8 +213,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     splineSceneUrl: '',
     footerQuote: '',
     profilePhoto: '',
-    enablePhotoBooth: false
+    enablePhotoBooth: false,
+    documentation: { ...defaultDocumentationContent },
   });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [experience, setExperience] = useState<Experience[]>([]);
@@ -146,10 +243,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Initial sync from props (only on mount)
-  const [isInitialSync, setIsInitialSync] = useState(true);
   useEffect(() => {
-    if (!isInitialSync) return;
     setProjects(initialProjects);
     setLearning(initialLearning);
     setNotes(initialNotes);
@@ -159,45 +253,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setExperience(initialExperience);
     setCommunity(initialCommunity || []);
     setEducation(initialEducation);
-    setIsInitialSync(false);
-  }, []);
+  }, [
+    initialProjects,
+    initialLearning,
+    initialNotes,
+    initialSkills,
+    initialCertifications,
+    initialAchievements,
+    initialExperience,
+    initialCommunity,
+    initialEducation,
+  ]);
 
   // Sync settings from parent when it reloads from server
   useEffect(() => {
     if (initialSettings) {
-      setSettings(initialSettings);
+      setSettings({
+        ...initialSettings,
+        documentation: {
+          ...defaultDocumentationContent,
+          ...initialSettings.documentation,
+        },
+      });
     }
   }, [initialSettings]);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passcode === 'abhay2026') {
-      setIsAuthenticated(true);
-      setAuthError('');
-      showToast('Admin session authenticated successfully');
-    } else {
-      setAuthError('Incorrect passcode. Contact the site owner for access.');
-    }
-  };
 
   // Safe delete handler
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
     try {
-      const res = await fetch(`/api/${deleteTarget.type === 'learning' ? 'learning' : deleteTarget.type}s`, {
+      const routes: Record<string, string> = {
+        project: 'projects',
+        experience: 'experience',
+        certification: 'certifications',
+        achievement: 'achievements',
+        learning: 'learning',
+        note: 'notes',
+        skill: 'skills',
+        community: 'community',
+        education: 'education',
+      };
+      const route = routes[deleteTarget.type];
+      if (!route) throw new Error(`Unsupported delete type: ${deleteTarget.type}`);
+
+      const res = await fetch(`/api/${route}?id=${encodeURIComponent(deleteTarget.id)}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: deleteTarget.id }),
       });
-      if (!res.ok) throw new Error('Delete failed');
-      onDataChange?.();
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      await onDataChange?.();
       showToast(`Deleted ${deleteTarget.type} "${deleteTarget.title}"`);
-    } catch (e) {
-      showToast('Failed to delete');
+    } catch (error) {
+      console.error('Failed to delete portfolio item:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to delete');
+    } finally {
+      setDeleteTarget(null);
     }
-    setDeleteTarget(null);
-    if (onDataChange) onDataChange();
   };
 
   // Reorder projects
@@ -249,6 +360,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Save Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSavingSettings(true);
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
@@ -258,11 +370,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (!res.ok) throw new Error('Failed to save settings');
       const updated = await res.json();
       setSettings(updated);
+      await onDataChange?.();
       showToast('Site settings, profiles & resume updated.');
-      if (onDataChange) onDataChange();
     } catch (e) {
       showToast('Failed to save settings');
+    } finally {
+      setIsSavingSettings(false);
     }
+  };
+
+  const updateDocumentationContent = (key: keyof DocumentationContent, value: string) => {
+    setSettings((current) => ({
+      ...current,
+      documentation: {
+        ...defaultDocumentationContent,
+        ...current.documentation,
+        [key]: value,
+      },
+    }));
   };
 
   // Quick learning status switch
@@ -356,6 +481,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                    placeholder="Enter admin access key"
                   className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#141518] text-white text-xs font-mono border border-[#2e3038] focus:border-[#5865f2] outline-none"
                   autoFocus
+                  disabled={authLoading}
                 />
               </div>
               {authError && <p className="text-xs text-red-400 font-mono">{authError}</p>}
@@ -363,9 +489,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-lg bg-[#5865f2] hover:bg-[#4752c4] text-white font-medium text-xs font-mono shadow-md transition-colors"
+              disabled={authLoading}
+              className="w-full py-2.5 rounded-lg bg-[#5865f2] hover:bg-[#4752c4] text-white font-medium text-xs font-mono shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Unlock Admin Panel
+              {authLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Authenticating...
+                </span>
+              ) : (
+                'Unlock Admin Panel'
+              )}
             </button>
           </form>
 
@@ -408,6 +545,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Reset Defaults</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="px-2.5 py-1.5 rounded-lg bg-[#f87171]/10 hover:bg-[#f87171]/20 text-[#f87171] text-xs font-mono flex items-center gap-1.5 border border-[#f87171]/30"
+            title="Logout"
+          >
+            <span className="hidden md:inline">Logout</span>
+            <LogOut className="w-3.5 h-3.5" />
           </button>
 
           {onClose && (
@@ -944,8 +1090,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {achievements.map((ach) => (
-                <div key={ach.id} className="p-4 rounded-xl bg-[#18191d] border border-[#2e3038] flex items-start justify-between gap-3 text-xs font-mono">
+              {achievements.map((ach, index) => (
+                <div key={`${ach.id}-${index}`} className="p-4 rounded-xl bg-[#18191d] border border-[#2e3038] flex items-start justify-between gap-3 text-xs font-mono">
                   <div className="space-y-1">
                     <span className="text-[10px] text-[#f0b232] font-semibold">{ach.rankOrHonor}</span>
                     <div className="font-bold text-white">{ach.title}</div>
@@ -1323,12 +1469,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* TAB: SETTINGS & PROFILES */}
         {activeTab === 'settings' && (
-          <form onSubmit={handleSaveSettings} className="p-6 rounded-xl bg-[#18191d] border border-[#2e3038] space-y-5 text-xs font-mono max-w-3xl">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-              Student Profiles, Socials & Resume
-            </h3>
+          <form onSubmit={handleSaveSettings} className="mx-auto w-full max-w-5xl space-y-5 text-xs font-mono">
+            <div className="rounded-2xl border border-[#2e3038] bg-gradient-to-br from-[#1b1d23] to-[#15161a] p-5 sm:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#38bdf8]">Workspace identity</p>
+                  <h3 className="text-lg font-bold text-white">Profile & site settings</h3>
+                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-400">
+                    Keep your public profile, academics, contact links, and site preferences up to date.
+                  </p>
+                </div>
+                <span className="rounded-full border border-[#39404b] bg-[#111216] px-3 py-1 text-[10px] text-gray-400">
+                  Changes apply to the public portfolio
+                </span>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <section className="grid gap-5 rounded-2xl border border-[#2e3038] bg-[#18191d] p-4 sm:p-6 md:grid-cols-[minmax(0,1.3fr)_minmax(220px,0.7fr)]">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-white">Profile photo</h4>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+                    Upload a clear image, then drag and zoom until your face sits comfortably inside the circular frame.
+                  </p>
+                </div>
+                <ImageUpload
+                  label="Profile image"
+                  value={settings.profilePhoto}
+                  onChange={(url) => setSettings({ ...settings, profilePhoto: url })}
+                  placeholder="https://... or upload a photo"
+                  aspectRatio={1}
+                  outputWidth={720}
+                />
+              </div>
+
+              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[#2e3038] bg-[#121316] p-5 text-center">
+                <ProfilePhoto
+                  src={settings.profilePhoto || undefined}
+                  alt={settings.name || 'Profile preview'}
+                  size={112}
+                  initials={(settings.name || '').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
+                />
+                <div>
+                  <p className="font-semibold text-white">{settings.name || 'Your name'}</p>
+                  <p className="mt-1 text-[10px] text-gray-400">{settings.subtitle || 'Your headline appears here'}</p>
+                </div>
+                <p className="max-w-[220px] text-[10px] leading-relaxed text-gray-500">
+                  Live circular preview. Adjust the crop above if your face is too close to the edge.
+                </p>
+              </div>
+            </section>
+
+            <section className="space-y-5 rounded-2xl border border-[#2e3038] bg-[#18191d] p-4 sm:p-6">
+              <div>
+                <h4 className="text-sm font-semibold text-white">Profile & academics</h4>
+                <p className="mt-1 text-[11px] text-gray-500">The details shown in your portfolio introduction.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-gray-400">Full Name:</label>
                 <input
@@ -1409,15 +1606,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <ImageUpload
-                  label="Profile Photo"
-                  value={settings.profilePhoto}
-                  onChange={(url) => setSettings({ ...settings, profilePhoto: url })}
-                  placeholder="https://... or upload photo"
-                />
-              </div>
-
               <div className="space-y-1">
                 <label className="text-gray-400">CGPA — Overall:</label>
                 <input
@@ -1457,6 +1645,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setSettings({ ...settings, bio: e.target.value })}
                   className="w-full p-2 rounded bg-[#141518] border border-[#2e3038] text-white font-sans text-xs"
                 />
+              </div>
+
+              <div className="sm:col-span-2 border-t border-[#2b2e37] pt-4">
+                <h4 className="text-sm font-semibold text-white">Documentation landing content</h4>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Edit the public documentation page copy and labels. Use {'{name}'} in the introduction to insert the profile name.
+                </p>
+              </div>
+              {documentationFields.map(({ key, label, multiline }) => {
+                const value = settings.documentation?.[key] ?? defaultDocumentationContent[key];
+                return (
+                  <div key={key} className={`space-y-1 ${multiline ? 'sm:col-span-2' : ''}`}>
+                    <label htmlFor={`documentation-${key}`} className="text-gray-400">{label}:</label>
+                    {multiline ? (
+                      <textarea
+                        id={`documentation-${key}`}
+                        rows={key === 'description' ? 3 : 2}
+                        value={value}
+                        onChange={(event) => updateDocumentationContent(key, event.target.value)}
+                        className="w-full rounded border border-[#2e3038] bg-[#141518] p-2 font-sans text-xs text-white"
+                      />
+                    ) : (
+                      <input
+                        id={`documentation-${key}`}
+                        type="text"
+                        value={value}
+                        onChange={(event) => updateDocumentationContent(key, event.target.value)}
+                        className="w-full rounded border border-[#2e3038] bg-[#141518] p-2 text-white"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
+              <div className="sm:col-span-2 border-t border-[#2b2e37] pt-4">
+                <h4 className="text-sm font-semibold text-white">Contact & social profiles</h4>
+                <p className="mt-1 text-[11px] text-gray-500">Public links and ways visitors can reach you.</p>
               </div>
 
               <div className="space-y-1">
@@ -1538,6 +1763,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 />
               </div>
 
+              <div className="sm:col-span-2 border-t border-[#2b2e37] pt-4">
+                <h4 className="text-sm font-semibold text-white">Integrations & display</h4>
+                <p className="mt-1 text-[11px] text-gray-500">Optional live stats, embedded experiences, and appearance settings.</p>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-gray-400 flex items-center gap-1.5">
                   <GithubIcon className="w-3.5 h-3.5 text-[#38bdf8]" />
@@ -1585,14 +1815,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </label>
               </div>
             </div>
+            </section>
 
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-[#23a55a] hover:bg-[#1f934f] text-white font-bold flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save All Settings & Profiles</span>
-            </button>
+            <div className="sticky bottom-2 z-10 flex justify-end rounded-xl border border-[#2e3038] bg-[#17181d]/95 p-3 shadow-xl backdrop-blur">
+              <button
+                type="submit"
+                disabled={isSavingSettings}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#23a55a] px-4 py-2.5 font-bold text-white transition-colors hover:bg-[#1f934f] disabled:cursor-wait disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                <span>{isSavingSettings ? 'Saving settings…' : 'Save all profile & site settings'}</span>
+              </button>
+            </div>
           </form>
         )}
       </main>
@@ -1832,6 +2066,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                    value={editingCert.badgeImage || ''}
                    onChange={(url) => setEditingCert({ ...editingCert, badgeImage: url })}
                    placeholder="https://... or upload badge image"
+                   aspectRatio={1}
+                   outputWidth={720}
                  />
                </div>
                <div className="space-y-1">
@@ -2156,6 +2392,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                    value={editingCommunity.photo || ''}
                    onChange={(url) => setEditingCommunity({ ...editingCommunity, photo: url })}
                    placeholder="https://... or upload community photo"
+                   aspectRatio={4 / 3}
+                   outputWidth={960}
                  />
                </div>
                <div className="space-y-1">
@@ -2180,15 +2418,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
              <div className="p-4 bg-[#1a1b20] border-t border-[#282a32] flex items-center justify-end gap-2">
                <button onClick={() => setEditingCommunity(null)} className="px-4 py-2 rounded bg-[#25272e] text-gray-300">Cancel</button>
                 <button onClick={async () => {
-                  await fetch('/api/community', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(editingCommunity),
-                  });
-                  onDataChange?.();
-                  setEditingCommunity(null);
-                  showToast('Community project saved.');
-                  if (onDataChange) onDataChange();
+                  try {
+                    const res = await fetch('/api/community', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(editingCommunity),
+                    });
+                    if (!res.ok) throw new Error(`Save failed (${res.status})`);
+                    await onDataChange?.();
+                    setEditingCommunity(null);
+                    showToast('Community project saved.');
+                  } catch (error) {
+                    console.error('Failed to save community project:', error);
+                    showToast(error instanceof Error ? error.message : 'Failed to save community project');
+                  }
                 }} disabled={!editingCommunity.title} className="px-4 py-2 rounded bg-[#5865f2] hover:bg-[#4752c4] text-white font-bold flex items-center gap-1.5">
                   <Save className="w-4 h-4" />
                   <span>Save Community Project</span>
@@ -2299,15 +2542,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="p-4 bg-[#1a1b20] border-t border-[#282a32] flex items-center justify-between">
               <button onClick={() => setEditingNote(null)} className="px-4 py-2 rounded bg-[#25272e] text-gray-300">Cancel</button>
               <button onClick={async () => {
-                await fetch('/api/notes', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(editingNote),
-                });
-                onDataChange?.();
-                setEditingNote(null);
-                showToast('Note saved.');
-                if (onDataChange) onDataChange();
+                try {
+                  const res = await fetch('/api/notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(editingNote),
+                  });
+                  if (!res.ok) throw new Error(`Save failed (${res.status})`);
+                  await onDataChange?.();
+                  setEditingNote(null);
+                  showToast('Note saved.');
+                } catch (error) {
+                  console.error('Failed to save note:', error);
+                  showToast(error instanceof Error ? error.message : 'Failed to save note');
+                }
               }} disabled={!editingNote.title} className="px-4 py-2 rounded bg-[#5865f2] text-white font-bold flex items-center gap-1.5"><Save className="w-4 h-4" /><span>Save Note</span></button>
             </div>
           </div>

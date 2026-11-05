@@ -2,15 +2,17 @@
 
 import React, { useState } from 'react';
 import { ArchitectureNode } from '@/types';
-import { ArrowRight, Cpu, Info, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Cpu, Info } from 'lucide-react';
 
 interface InteractiveArchitectureProps {
   nodes?: ArchitectureNode[];
+  technologies?: string[];
   description?: string;
 }
 
 export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = ({
   nodes = [],
+  technologies = [],
   description,
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(nodes[0]?.id || null);
@@ -24,6 +26,9 @@ export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = (
   }
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId) || nodes[0];
+  const connectedTechnology = selectedNode?.tech
+    ? technologies.find((technology) => technology.trim().toLowerCase() === selectedNode.tech?.trim().toLowerCase())
+    : undefined;
 
   return (
     <div className="p-5 rounded-xl bg-[#141518] border border-[#2e3038] space-y-4 font-sans">
@@ -49,12 +54,15 @@ export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = (
 
           return (
             <React.Fragment key={node.id}>
-              <div
+              <button
+                type="button"
                 onClick={() => setSelectedNodeId(node.id)}
                 onMouseEnter={() => setSelectedNodeId(node.id)}
-                className={`flex-shrink-0 cursor-pointer p-3 rounded-lg border transition-all duration-200 ${
+                onFocus={() => setSelectedNodeId(node.id)}
+                aria-pressed={isSelected}
+                className={`flex-shrink-0 cursor-pointer text-left p-3 rounded-lg border transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#38bdf8] ${
                   isSelected
-                    ? 'bg-[#007acc]/20 border-[#007acc] text-white shadow-lg shadow-[#007acc]/20 scale-105'
+                    ? 'bg-[#007acc]/20 border-[#007acc] text-white'
                     : 'bg-[#1e2026] border-[#343740] text-gray-300 hover:border-gray-400'
                 }`}
               >
@@ -65,11 +73,11 @@ export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = (
                   <span className="text-xs font-bold font-mono whitespace-nowrap">{node.label}</span>
                 </div>
                 <div className="text-[10px] font-mono text-gray-400">{node.role}</div>
-              </div>
+              </button>
 
               {!isLast && (
                 <div className="flex-shrink-0 flex items-center justify-center px-1 text-gray-400">
-                  <ArrowRight className="w-4 h-4 animate-pulse" />
+                  <ArrowRight className="w-4 h-4" />
                 </div>
               )}
             </React.Fragment>
@@ -79,7 +87,7 @@ export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = (
 
       {/* Selected Node Deep Inspector */}
       {selectedNode && (
-        <div className="p-4 rounded-lg bg-[#1a1b20] border border-[#2b2e37] space-y-2 animate-in fade-in duration-150">
+        <div className="p-4 rounded-lg bg-[#1a1b20] border border-[#2b2e37] space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-[#007acc]/20 text-[#38bdf8] font-mono text-xs font-semibold">
@@ -90,7 +98,7 @@ export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = (
 
             {selectedNode.tech && (
               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#25272e] border border-[#383a42] text-gray-300">
-                Tech: {selectedNode.tech}
+                {connectedTechnology ? `Connected technology: ${connectedTechnology}` : `Component tech: ${selectedNode.tech}`}
               </span>
             )}
           </div>
@@ -98,6 +106,11 @@ export const InteractiveArchitecture: React.FC<InteractiveArchitectureProps> = (
           <p className="text-xs text-gray-300 leading-relaxed font-sans">
             {selectedNode.description}
           </p>
+          {connectedTechnology && (
+            <p className="text-[10px] font-mono text-gray-500">
+              Connection comes from this architecture node&apos;s declared technology.
+            </p>
+          )}
         </div>
       )}
     </div>

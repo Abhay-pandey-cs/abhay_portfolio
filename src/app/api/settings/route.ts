@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const existing = await db.collection('settings').findOne({ _id: 'site_settings' } as any);
     const cleanedBody = Object.fromEntries(
-      Object.entries(body).filter(([, value]) => value !== undefined && value !== null && value !== '')
+      Object.entries(body).filter(([, value]) => value !== undefined && value !== null)
     );
     const updated = { ...(existing || {}), ...cleanedBody, _id: 'site_settings' };
     

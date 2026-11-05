@@ -24,6 +24,8 @@ interface InteractiveTerminalProps {
   skills: Skill[];
   onOpenAdmin?: () => void;
   onNavigateSection?: (sectionId: string) => void;
+  onOpenDocs?: () => void;
+  onToggleMatrix?: () => void;
 }
 
 interface CommandLog {
@@ -41,6 +43,8 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
   skills,
   onOpenAdmin,
   onNavigateSection,
+  onOpenDocs,
+  onToggleMatrix,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -48,7 +52,7 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
   const [inputVal, setInputVal] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const terminalBodyRef = useRef<HTMLDivElement | null>(null);
 
   const [logs, setLogs] = useState<CommandLog[]>([
     {
@@ -65,7 +69,8 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      const terminalBody = terminalBodyRef.current;
+      terminalBody?.scrollTo({ top: terminalBody.scrollHeight, behavior: 'smooth' });
     }
   }, [logs, isOpen]);
 
@@ -97,6 +102,10 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
               <div><span className="text-[#23a55a] font-mono font-bold">cat bio.txt</span> : View Abhay's student bio & CGPA</div>
               <div><span className="text-[#23a55a] font-mono font-bold">curl /api/abhay</span> : Fetch JSON profile payload</div>
               <div><span className="text-[#23a55a] font-mono font-bold">sudo admin</span> : Launch CMS Management Panel</div>
+              <div><span className="text-[#23a55a] font-mono font-bold">cat skills.json</span> : Print the current skills data</div>
+              <div><span className="text-[#23a55a] font-mono font-bold">matrix</span> : Toggle the visual matrix easter egg</div>
+              <div><span className="text-[#23a55a] font-mono font-bold">sudo unlock-workspace</span> : Toggle workspace visual mode (admin still requires login)</div>
+              <div><span className="text-[#23a55a] font-mono font-bold">open docs</span> : Return to the documentation landing</div>
               <div><span className="text-[#23a55a] font-mono font-bold">contact</span> : Get direct communication channels</div>
               <div><span className="text-[#23a55a] font-mono font-bold">clear</span> : Clear terminal screen</div>
             </div>
@@ -210,8 +219,14 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
               <p><span className="text-[#007acc]">Bio:</span> {settings.bio}</p>
             </div>
           );
+        } else if (arg === 'skills.json') {
+          outputNode = (
+            <pre className="max-h-64 overflow-auto rounded border border-[#2e3038] bg-[#101115] p-3 text-[10px] leading-relaxed text-[#a5f3fc]">
+              {JSON.stringify(skills, null, 2)}
+            </pre>
+          );
         } else {
-          outputNode = <p className="text-red-400 text-xs">cat: {arg || 'file'}: No such file or directory. Try 'cat bio.txt'</p>;
+          outputNode = <p className="text-red-400 text-xs">cat: {arg || 'file'}: No such file or directory. Try 'cat bio.txt' or 'cat skills.json'.</p>;
         }
         break;
 
@@ -236,11 +251,32 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
 
       case 'sudo':
       case 'admin':
-        if (onOpenAdmin) {
+        if (cmd === 'sudo' && arg === 'unlock-workspace') {
+          onToggleMatrix?.();
+          outputNode = (
+            <p className="text-[#23a55a] text-xs">
+              Visual workspace mode toggled. Admin operations remain protected by the passcode.
+            </p>
+          );
+        } else if (onOpenAdmin) {
           onOpenAdmin();
           outputNode = <p className="text-[#23a55a] text-xs">🚀 Launching Portfolio Admin Management Console...</p>;
         } else {
           outputNode = <p className="text-yellow-400 text-xs">Opening /admin dashboard...</p>;
+        }
+        break;
+
+      case 'matrix':
+        onToggleMatrix?.();
+        outputNode = <p className="text-[#23a55a] text-xs">Matrix visual mode toggled.</p>;
+        break;
+
+      case 'open':
+        if (arg === 'docs') {
+          onOpenDocs?.();
+          outputNode = <p className="text-[#38bdf8] text-xs">Returning to the documentation landing...</p>;
+        } else {
+          outputNode = <p className="text-red-400 text-xs">Usage: open docs</p>;
         }
         break;
 
@@ -379,7 +415,7 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
 
       {/* Terminal View Body */}
       {isOpen && (
-        <div className="flex-1 p-3 overflow-y-auto space-y-2 bg-[#141518] text-[#cccccc]">
+        <div ref={terminalBodyRef} className="flex-1 p-3 overflow-y-auto space-y-2 bg-[#141518] text-[#cccccc]">
           {activeTab === 'terminal' && (
             <>
               {logs.map((log) => (
@@ -402,12 +438,11 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="type 'help', 'projects', 'cat bio.txt' or 'sudo admin'..."
+                  placeholder="type 'help', 'projects', 'cat skills.json' or 'open docs'..."
                   className="flex-1 bg-transparent text-white outline-none border-none font-mono text-xs placeholder:text-gray-400"
                   autoFocus
                 />
               </div>
-              <div ref={bottomRef} />
             </>
           )}
 

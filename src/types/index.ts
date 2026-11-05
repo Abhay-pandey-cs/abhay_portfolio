@@ -174,7 +174,70 @@ export interface SiteSettings {
   footerQuote: string;
   profilePhoto: string;
   enablePhotoBooth: boolean;
+  documentation?: DocumentationContent;
 }
+
+export interface DocumentationContent {
+  brandSuffix: string;
+  docsNavigation: string;
+  architectureNavigation: string;
+  projectsNavigation: string;
+  workspaceNavigation: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  projectsAction: string;
+  workspaceAction: string;
+  featuredLabel: string;
+  caseStudyAction: string;
+  emptyFeaturedTitle: string;
+  emptyFeaturedDescription: string;
+  projectsMetricLabel: string;
+  technologiesMetricLabel: string;
+  notesMetricLabel: string;
+  projectsEndpoint: string;
+  projectsFallback: string;
+  skillsEndpoint: string;
+  skillsFallback: string;
+  architectureEndpoint: string;
+  architectureFallback: string;
+  notesAction: string;
+  notesTitle: string;
+  footerHint: string;
+  reducedMotionFooterHint: string;
+  footerAction: string;
+}
+
+export const defaultDocumentationContent: DocumentationContent = {
+  brandSuffix: ' / engineering docs',
+  docsNavigation: 'Docs',
+  architectureNavigation: 'Architecture',
+  projectsNavigation: 'Projects',
+  workspaceNavigation: 'Workspace',
+  eyebrow: 'Portfolio documentation',
+  title: 'Engineering thoughtful systems.',
+  description: '{name} builds software, explores computer systems, and documents the work behind each project.',
+  projectsAction: 'Explore projects',
+  workspaceAction: 'Launch workspace',
+  featuredLabel: 'Selected field note',
+  caseStudyAction: 'Read the case study',
+  emptyFeaturedTitle: 'A workspace for thoughtful engineering.',
+  emptyFeaturedDescription: 'Project notes and technical decisions will appear here.',
+  projectsMetricLabel: 'Projects',
+  technologiesMetricLabel: 'Technologies',
+  notesMetricLabel: 'Notes',
+  projectsEndpoint: 'GET /projects',
+  projectsFallback: 'Project stories',
+  skillsEndpoint: 'GET /skills',
+  skillsFallback: 'Engineering toolkit',
+  architectureEndpoint: 'GET /architecture',
+  architectureFallback: 'Systems & design decisions',
+  notesAction: 'OPEN WORKSPACE',
+  notesTitle: 'Technical notes & journal',
+  footerHint: 'Scroll to peel documentation & enter the workspace',
+  reducedMotionFooterHint: 'Scroll to enter the workspace',
+  footerAction: 'Continue to workspace',
+};
 
 // Stats types for AI Assistant & coding profiles
 export interface GitHubStats {

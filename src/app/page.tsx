@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { LazyMotion, MotionConfig, domAnimation, m, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, GitBranch, LayoutGrid, Terminal } from 'lucide-react';
 import { VSCodeShell } from '@/components/layout/VSCodeShell';
+import { PaperPhysicsScene } from '@/components/layout/PaperPhysicsScene';
 import { DiscordBar } from '@/components/layout/DiscordBar';
 import { WhatsAppDrawer } from '@/components/layout/WhatsAppDrawer';
 import { InteractiveTerminal } from '@/components/layout/InteractiveTerminal';
@@ -22,6 +25,7 @@ import { ContactSection } from '@/components/sections/ContactSection';
 import { CaseStudyModal } from '@/components/sections/CaseStudyModal';
 import { AdminPanel } from '@/components/admin/AdminPanel';
 import { WhatsAppConnectAI } from '@/components/WhatsAppConnectAI';
+import { defaultMotionTransition, motionDuration, motionEase, workspaceCurvePath } from '@/lib/motion';
 import { 
   Project, 
   LearningTopic, 
@@ -38,9 +42,12 @@ import {
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [initializationAnimationComplete, setInitializationAnimationComplete] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [isAdminMode, setIsAdminMode] = useState(false);
    const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [isMatrixActive, setIsMatrixActive] = useState(false);
   
   // Live State
   const [projects, setProjects] = useState<Project[]>([]);
@@ -83,7 +90,6 @@ export default function Home() {
   const [selectedCaseStudy, setSelectedCaseStudy] = useState<Project | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [pendingScroll, setPendingScroll] = useState<string | null>(null);
 
   const refreshData = async () => {
     try {
@@ -147,52 +153,153 @@ export default function Home() {
     refreshData();
   }, []);
 
-  // Smooth-scroll to a section inside the common, always-scrollable overview
-  // instead of switching to a separate single-section view.
-  const handleSelectSection = (id: string) => {
-    setActiveSection('overview');
-    setPendingScroll(id);
-  };
-
   useEffect(() => {
-    if (!pendingScroll) return;
-    const el = document.querySelector(`[data-section-id="${pendingScroll}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setPendingScroll(null);
-  }, [pendingScroll, activeSection]);
+    const timer = window.setTimeout(
+      () => setInitializationAnimationComplete(true),
+      shouldReduceMotion ? 0 : motionDuration.initialization * 1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [shouldReduceMotion]);
 
-   // Global Ctrl/Cmd+K toggles the command palette
-   useEffect(() => {
-     const onKey = (e: KeyboardEvent) => {
-       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-         e.preventDefault();
-         setIsCommandPaletteOpen((open) => !open);
-       }
-       // Ctrl/Cmd + Shift + A toggles admin mode
-       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
-         e.preventDefault();
-         setIsAdminMode((open) => !open);
-       }
-     };
-     window.addEventListener('keydown', onKey);
-     return () => window.removeEventListener('keydown', onKey);
-   }, []);
+  const handleSelectSection = useCallback((id: string) => {
+    if (id === activeSection) {
+      document.querySelector<HTMLElement>('[data-workspace-editor]')?.scrollTo({
+        top: 0,
+        behavior: shouldReduceMotion ? 'instant' : 'smooth',
+      });
+      return;
+    }
+    setActiveSection(id);
+  }, [activeSection, shouldReduceMotion]);
 
-  if (!isClient || loading) {
+  const openCommandPalette = useCallback(() => {
+    const workspaceScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if (window.scrollY < workspaceScroll - 8) {
+      window.scrollTo({
+        top: workspaceScroll,
+        behavior: shouldReduceMotion ? 'instant' : 'smooth',
+      });
+      window.setTimeout(() => setIsCommandPaletteOpen(true), shouldReduceMotion ? 0 : 450);
+      return;
+    }
+    setIsCommandPaletteOpen(true);
+  }, [shouldReduceMotion]);
+
+  const returnToDocumentation = useCallback(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: shouldReduceMotion ? 'instant' : 'smooth',
+    });
+  }, [shouldReduceMotion]);
+
+  // Global Ctrl/Cmd+K toggles the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (isCommandPaletteOpen) setIsCommandPaletteOpen(false);
+        else openCommandPalette();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setIsAdminMode((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isCommandPaletteOpen, openCommandPalette]);
+
+  if (!isClient || loading || !initializationAnimationComplete) {
     return (
-      <div className="min-h-screen bg-[#121316] flex items-center justify-center font-mono text-xs text-gray-400">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-[#007acc] animate-ping" />
-          <span>Initializing Abhay Pandey Engineering Workspace...</span>
-        </div>
-      </div>
+      <LazyMotion features={domAnimation}>
+        <MotionConfig reducedMotion="user" transition={defaultMotionTransition}>
+          <div className="min-h-screen bg-[#121316] flex items-center justify-center font-mono text-xs text-gray-400">
+            <div className="flex items-center gap-3">
+              <svg
+                viewBox="0 0 72 22"
+                className="h-8 w-24 overflow-visible"
+                role="img"
+                aria-label="Drawing workspace reference curve"
+              >
+                <m.path
+                  d={workspaceCurvePath}
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="1.2"
+                  initial={{ pathLength: shouldReduceMotion ? 1 : 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: motionDuration.initialization, ease: motionEase }}
+                />
+                <m.path
+                  d="M5 19H13V14"
+                  fill="none"
+                  stroke="#59616e"
+                  strokeWidth="0.8"
+                  initial={{ pathLength: shouldReduceMotion ? 1 : 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: motionDuration.geometry, delay: shouldReduceMotion ? 0 : 0.48, ease: motionEase }}
+                />
+                <m.circle
+                  cx="13"
+                  cy="14"
+                  r="1.2"
+                  fill="#38bdf8"
+                  initial={{ scale: shouldReduceMotion ? 1 : 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: motionDuration.quick, delay: shouldReduceMotion ? 0 : 0.68, ease: motionEase }}
+                />
+              </svg>
+              <span>Initializing Abhay Pandey Engineering Workspace...</span>
+            </div>
+          </div>
+        </MotionConfig>
+        </LazyMotion>
     );
   }
 
   const featuredProjects = projects.filter(p => p.featured && p.published);
 
   return (
-    <div className="relative h-screen overflow-hidden bg-[#121316] text-[#e2e4e9] flex flex-col font-sans">
+    <LazyMotion features={domAnimation}>
+      <MotionConfig reducedMotion="user" transition={defaultMotionTransition}>
+        <PaperPhysicsScene
+          settings={settings}
+          projects={projects}
+          skills={skills}
+          notes={notes}
+          onNavigate={handleSelectSection}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          matrixActive={isMatrixActive}
+        >
+        <div className="relative flex h-screen flex-col overflow-hidden bg-[#121316] font-sans text-[#e2e4e9]">
+      <header className="flex h-9 shrink-0 items-center justify-between border-b border-[#25272e] bg-[#1a1b1f] px-3 text-[10px] font-mono text-gray-400">
+        <div className="flex items-center gap-1.5" aria-label="Workspace window controls">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+        </div>
+        <div className="hidden items-center gap-1.5 sm:flex">
+          <span>abhay-workspace</span><span className="text-gray-600">›</span>
+          <span>src</span><span className="text-gray-600">›</span>
+          <span>portfolio</span><span className="text-gray-600">›</span>
+          <span className="text-gray-200">{activeSection === 'overview' ? 'Overview.tsx' : `${activeSection}.tsx`}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="hidden items-center gap-1 text-[#23a55a] sm:inline-flex"><GitBranch className="h-3 w-3" /> main*</span>
+          <span className="hidden items-center gap-1 md:inline-flex"><Terminal className="h-3 w-3" /> terminal ready</span>
+          <button type="button" className="hidden items-center gap-1 rounded px-2 py-1 hover:bg-white/5 sm:inline-flex" aria-label="Workspace layout">
+            <LayoutGrid className="h-3 w-3" /> Layout
+          </button>
+          <button
+            type="button"
+            onClick={returnToDocumentation}
+            className="inline-flex items-center gap-1 rounded border border-[#3b4350] bg-white/[0.03] px-2 py-1 text-gray-200 transition-colors hover:border-[#38bdf8] hover:text-white"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            <span>Back to docs</span>
+          </button>
+        </div>
+      </header>
       {/* Top Discord Bar: Presence Status & Channel Links */}
       <DiscordBar
         settings={settings}
@@ -209,169 +316,83 @@ export default function Home() {
           activeSection={activeSection}
           onSelectSection={handleSelectSection}
           onSelectProject={(p) => setSelectedCaseStudy(p)}
-          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onOpenCommandPalette={openCommandPalette}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
         >
-          {/* RENDER ACTIVE TAB / SECTION */}
-          {activeSection === 'overview' && (
-            <div className="space-y-12">
-              <div data-section-id="overview" className="relative border-2 border-red-500/60 rounded p-2 my-2 bg-red-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-red-500 text-black z-10">overview (Hero + About)</span>
-                <HeroSection
-                  settings={settings}
-                  featuredProjects={featuredProjects}
-                  onNavigateSection={handleSelectSection}
-                  onSelectProject={(p) => setSelectedCaseStudy(p)}
-                />
-                <AboutSection
-                  settings={settings}
-                  onNavigateSection={handleSelectSection}
-                />
-              </div>
-              <div data-section-id="projects" className="relative border-2 border-orange-500/60 rounded p-2 my-2 bg-orange-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-orange-500 text-black z-10">projects</span>
-                <ProjectsSection
-                  projects={projects}
-                  onSelectProject={(p) => setSelectedCaseStudy(p)}
-                  {...(isAdminMode ? { onOpenNewProjectModal: () => setIsAdminOpen(true) } : {})}
-                />
-              </div>
-              <div data-section-id="experience" className="relative border-2 border-amber-400/60 rounded p-2 my-2 bg-amber-400/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-400 text-black z-10">experience</span>
-                <ExperienceSection
-                  experience={experience}
-                  {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
-                />
-              </div>
-              <div data-section-id="learning" className="relative border-2 border-emerald-400/60 rounded p-2 my-2 bg-emerald-400/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-400 text-black z-10">learning</span>
-                <LearningRoadmap
-                  topics={learning}
-                  {...(isAdminMode ? { onOpenAddTopicModal: () => setIsAdminOpen(true) } : {})}
-                />
-              </div>
-              <div data-section-id="systems" className="relative border-2 border-green-500/60 rounded p-2 my-2 bg-green-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-green-500 text-black z-10">systems</span>
-                <SystemsDeepDive />
-              </div>
-              <div data-section-id="coding" className="relative border-2 border-cyan-400/60 rounded p-2 my-2 bg-cyan-400/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-400 text-black z-10">coding (tech + profiles)</span>
-                <TechStackSection skills={skills} />
-                <CodingProfilesSection settings={settings} />
-              </div>
-              <div data-section-id="notes" className="relative border-2 border-sky-500/60 rounded p-2 my-2 bg-sky-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-sky-500 text-black z-10">notes</span>
-                <NotesSection
-                  notes={notes}
-                  {...(isAdminMode ? { onOpenNewNoteModal: () => setIsAdminOpen(true) } : {})}
-                />
-              </div>
-              <div data-section-id="certifications" className="relative border-2 border-yellow-400/60 rounded p-2 my-2 bg-yellow-400/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-yellow-400 text-black z-10">certifications</span>
-                <CertificationsSection
-                  certifications={certifications}
-                  {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
-                />
-              </div>
-              <div data-section-id="achievements" className="relative border-2 border-lime-500/60 rounded p-2 my-2 bg-lime-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-lime-500 text-black z-10">achievements</span>
-                <AchievementsSection
-                  achievements={achievements}
-                  {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
-                />
-              </div>
-              <div data-section-id="community" className="relative border-2 border-violet-500/60 rounded p-2 my-2 bg-violet-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-violet-500 text-black z-10">community</span>
-                <CommunitySection communityProjects={community} />
-              </div>
-              <div data-section-id="contact" className="relative border-2 border-pink-500/60 rounded p-2 my-2 bg-pink-500/10">
-                <span className="absolute -top-2.5 left-3 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-pink-500 text-black z-10">contact</span>
-                <ContactSection settings={settings} />
-              </div>
-            </div>
-          )}
+          {activeSection === 'overview' && <WorkspaceSectionFrame id="overview" label="overview (Hero + About)" tone="red">
+            <HeroSection
+              settings={settings}
+              featuredProjects={featuredProjects}
+              onNavigateSection={handleSelectSection}
+              onSelectProject={(p) => setSelectedCaseStudy(p)}
+            />
+            <AboutSection
+              settings={settings}
+              onNavigateSection={handleSelectSection}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'projects' && (
-            <div className="space-y-10">
-              <ProjectsSection
-                projects={projects}
-                onSelectProject={(p) => setSelectedCaseStudy(p)}
-                {...(isAdminMode ? { onOpenNewProjectModal: () => setIsAdminOpen(true) } : {})}
-              />
-            </div>
-          )}
+          {activeSection === 'projects' && <WorkspaceSectionFrame id="projects" label="projects" tone="orange">
+            <ProjectsSection
+              projects={projects}
+              onSelectProject={(p) => setSelectedCaseStudy(p)}
+              {...(isAdminMode ? { onOpenNewProjectModal: () => setIsAdminOpen(true) } : {})}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'experience' && (
-            <div className="space-y-10">
-              <ExperienceSection
-                experience={experience}
-                {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
-              />
-            </div>
-          )}
+          {activeSection === 'experience' && <WorkspaceSectionFrame id="experience" label="experience" tone="amber">
+            <ExperienceSection
+              experience={experience}
+              {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'certifications' && (
-            <div className="space-y-10">
-              <CertificationsSection
-                certifications={certifications}
-                {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
-              />
-            </div>
-          )}
+          {activeSection === 'certifications' && <WorkspaceSectionFrame id="certifications" label="certifications" tone="yellow">
+            <CertificationsSection
+              certifications={certifications}
+              {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'achievements' && (
-            <div className="space-y-10">
-              <AchievementsSection
-                achievements={achievements}
-                {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
-              />
-            </div>
-          )}
+          {activeSection === 'achievements' && <WorkspaceSectionFrame id="achievements" label="achievements" tone="lime">
+            <AchievementsSection
+              achievements={achievements}
+              {...(isAdminMode ? { onOpenAddModal: () => setIsAdminOpen(true) } : {})}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'learning' && (
-            <div className="space-y-10">
-              <LearningRoadmap
-                topics={learning}
-                {...(isAdminMode ? { onOpenAddTopicModal: () => setIsAdminOpen(true) } : {})}
-              />
-            </div>
-          )}
+          {activeSection === 'learning' && <WorkspaceSectionFrame id="learning" label="learning" tone="emerald">
+            <LearningRoadmap
+              topics={learning}
+              {...(isAdminMode ? { onOpenAddTopicModal: () => setIsAdminOpen(true) } : {})}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'systems' && (
-            <div className="space-y-10">
-              <SystemsDeepDive />
-            </div>
-          )}
+          {activeSection === 'systems' && <WorkspaceSectionFrame id="systems" label="systems" tone="green">
+            <SystemsDeepDive />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'notes' && (
-            <div className="space-y-10">
-              <NotesSection
-                notes={notes}
-                {...(isAdminMode ? { onOpenNewNoteModal: () => setIsAdminOpen(true) } : {})}
-              />
-            </div>
-          )}
+          {activeSection === 'notes' && <WorkspaceSectionFrame id="notes" label="notes" tone="sky">
+            <NotesSection
+              notes={notes}
+              {...(isAdminMode ? { onOpenNewNoteModal: () => setIsAdminOpen(true) } : {})}
+            />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'coding' && (
-            <div className="space-y-10">
-              <CodingProfilesSection settings={settings} />
-              <TechStackSection skills={skills} />
-            </div>
-          )}
+          {activeSection === 'coding' && <WorkspaceSectionFrame id="coding" label="coding (tech + profiles)" tone="cyan">
+            <CodingProfilesSection settings={settings} />
+            <TechStackSection skills={skills} />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'community' && (
-            <div className="space-y-10">
-              <CommunitySection communityProjects={community} />
-            </div>
-          )}
+          {activeSection === 'community' && <WorkspaceSectionFrame id="community" label="community" tone="violet">
+            <CommunitySection communityProjects={community} />
+          </WorkspaceSectionFrame>}
 
-          {activeSection === 'contact' && (
-            <div className="space-y-10">
-              <ContactSection settings={settings} />
-              <TechStackSection skills={skills} />
-            </div>
-          )}
+          {activeSection === 'contact' && <WorkspaceSectionFrame id="contact" label="contact" tone="pink">
+            <ContactSection settings={settings} />
+            <TechStackSection skills={skills} />
+          </WorkspaceSectionFrame>}
         </VSCodeShell>
       </div>
 
@@ -384,6 +405,8 @@ export default function Home() {
         skills={skills}
         onOpenAdmin={() => setIsAdminOpen(true)}
         onNavigateSection={handleSelectSection}
+        onOpenDocs={returnToDocumentation}
+        onToggleMatrix={() => setIsMatrixActive((active) => !active)}
       />
 
       {/* WhatsApp Quick Connect Interactive Floating Widget */}
@@ -452,6 +475,43 @@ export default function Home() {
           onClose={() => setIsAIAssistantOpen(false)}
         />
       )}
-    </div>
+        </div>
+        </PaperPhysicsScene>
+      </MotionConfig>
+    </LazyMotion>
   );
 }
+
+type WorkspaceSectionTone = 'red' | 'orange' | 'amber' | 'emerald' | 'green' | 'cyan' | 'sky' | 'yellow' | 'lime' | 'violet' | 'pink';
+
+const sectionToneClasses: Record<WorkspaceSectionTone, { border: string; badge: string; background: string }> = {
+  red: { border: 'border-red-500/60', badge: 'bg-red-500', background: 'bg-red-500/10' },
+  orange: { border: 'border-orange-500/60', badge: 'bg-orange-500', background: 'bg-orange-500/10' },
+  amber: { border: 'border-amber-400/60', badge: 'bg-amber-400', background: 'bg-amber-400/10' },
+  emerald: { border: 'border-emerald-400/60', badge: 'bg-emerald-400', background: 'bg-emerald-400/10' },
+  green: { border: 'border-green-500/60', badge: 'bg-green-500', background: 'bg-green-500/10' },
+  cyan: { border: 'border-cyan-400/60', badge: 'bg-cyan-400', background: 'bg-cyan-400/10' },
+  sky: { border: 'border-sky-500/60', badge: 'bg-sky-500', background: 'bg-sky-500/10' },
+  yellow: { border: 'border-yellow-400/60', badge: 'bg-yellow-400', background: 'bg-yellow-400/10' },
+  lime: { border: 'border-lime-500/60', badge: 'bg-lime-500', background: 'bg-lime-500/10' },
+  violet: { border: 'border-violet-500/60', badge: 'bg-violet-500', background: 'bg-violet-500/10' },
+  pink: { border: 'border-pink-500/60', badge: 'bg-pink-500', background: 'bg-pink-500/10' },
+};
+
+const WorkspaceSectionFrame: React.FC<{
+  id: string;
+  label: string;
+  tone: WorkspaceSectionTone;
+  children: React.ReactNode;
+}> = ({ id, label, tone, children }) => {
+  const colors = sectionToneClasses[tone];
+
+  return (
+    <div data-section-id={id} className={`relative my-2 rounded border-2 p-2 ${colors.border} ${colors.background}`}>
+      <span className={`absolute -top-2.5 left-3 z-10 rounded px-1.5 py-0.5 text-[10px] font-mono font-bold text-black ${colors.badge}`}>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+};

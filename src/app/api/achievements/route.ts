@@ -8,8 +8,11 @@ export async function GET() {
     if (!db) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
-    const achievements = await db.collection('achievements').find({}).toArray();
-    return NextResponse.json(achievements);
+    const achievements = await db.collection('achievements').find({}).sort({ _id: -1 }).toArray();
+    const uniqueAchievements = Array.from(
+      new Map(achievements.map((achievement) => [achievement.id || String(achievement._id), achievement])).values(),
+    );
+    return NextResponse.json(uniqueAchievements);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch achievements' }, { status: 500 });
   }
@@ -37,7 +40,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    await db.collection('achievements').insertOne(ach as any);
+    const collection = db.collection('achievements');
+    const existing = await collection.findOne({ id: ach.id });
+    if (existing) {
+      await collection.replaceOne({ _id: existing._id } as any, ach as any);
+      await collection.deleteMany({ id: ach.id, _id: { $ne: existing._id } } as any);
+      return NextResponse.json(ach);
+    }
+
+    await collection.insertOne(ach as any);
     return NextResponse.json(ach, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save achievement' }, { status: 500 });
@@ -55,7 +66,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    await db.collection('achievements').deleteOne({ id });
+    await db.collection('achievements').deleteMany({ id });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete achievement' }, { status: 500 });
