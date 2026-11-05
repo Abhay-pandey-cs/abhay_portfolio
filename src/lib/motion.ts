@@ -1,3 +1,4 @@
+
 import type { Variants } from 'framer-motion';
 
 export const motionDuration = {
