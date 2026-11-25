@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { LazyMotion, MotionConfig, domAnimation, m, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, GitBranch, LayoutGrid, Terminal } from 'lucide-react';
+import { GitBranch, LayoutGrid, Terminal } from 'lucide-react';
 import { VSCodeShell } from '@/components/layout/VSCodeShell';
-import { PaperPhysicsScene } from '@/components/layout/PaperPhysicsScene';
 import { DiscordBar } from '@/components/layout/DiscordBar';
 import { WhatsAppDrawer } from '@/components/layout/WhatsAppDrawer';
 import { InteractiveTerminal } from '@/components/layout/InteractiveTerminal';
@@ -173,24 +172,8 @@ export default function Home() {
   }, [activeSection, shouldReduceMotion]);
 
   const openCommandPalette = useCallback(() => {
-    const workspaceScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-    if (window.scrollY < workspaceScroll - 8) {
-      window.scrollTo({
-        top: workspaceScroll,
-        behavior: shouldReduceMotion ? 'instant' : 'smooth',
-      });
-      window.setTimeout(() => setIsCommandPaletteOpen(true), shouldReduceMotion ? 0 : 450);
-      return;
-    }
     setIsCommandPaletteOpen(true);
-  }, [shouldReduceMotion]);
-
-  const returnToDocumentation = useCallback(() => {
-    window.scrollTo({
-      top: 0,
-      behavior: shouldReduceMotion ? 'instant' : 'smooth',
-    });
-  }, [shouldReduceMotion]);
+  }, []);
 
   // Global Ctrl/Cmd+K toggles the command palette.
   useEffect(() => {
@@ -262,15 +245,6 @@ export default function Home() {
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user" transition={defaultMotionTransition}>
-        <PaperPhysicsScene
-          settings={settings}
-          projects={projects}
-          skills={skills}
-          notes={notes}
-          onNavigate={handleSelectSection}
-          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-          matrixActive={isMatrixActive}
-        >
         <div className="relative flex h-screen flex-col overflow-hidden bg-[#121316] font-sans text-[#e2e4e9]">
       <header className="flex h-9 shrink-0 items-center justify-between border-b border-[#25272e] bg-[#1a1b1f] px-3 text-[10px] font-mono text-gray-400">
         <div className="flex items-center gap-1.5" aria-label="Workspace window controls">
@@ -289,14 +263,6 @@ export default function Home() {
           <span className="hidden items-center gap-1 md:inline-flex"><Terminal className="h-3 w-3" /> terminal ready</span>
           <button type="button" className="hidden items-center gap-1 rounded px-2 py-1 hover:bg-white/5 sm:inline-flex" aria-label="Workspace layout">
             <LayoutGrid className="h-3 w-3" /> Layout
-          </button>
-          <button
-            type="button"
-            onClick={returnToDocumentation}
-            className="inline-flex items-center gap-1 rounded border border-[#3b4350] bg-white/[0.03] px-2 py-1 text-gray-200 transition-colors hover:border-[#38bdf8] hover:text-white"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            <span>Back to docs</span>
           </button>
         </div>
       </header>
@@ -405,7 +371,6 @@ export default function Home() {
         skills={skills}
         onOpenAdmin={() => setIsAdminOpen(true)}
         onNavigateSection={handleSelectSection}
-        onOpenDocs={returnToDocumentation}
         onToggleMatrix={() => setIsMatrixActive((active) => !active)}
       />
 
@@ -476,7 +441,6 @@ export default function Home() {
         />
       )}
         </div>
-        </PaperPhysicsScene>
       </MotionConfig>
     </LazyMotion>
   );

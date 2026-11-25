@@ -24,7 +24,6 @@ interface InteractiveTerminalProps {
   skills: Skill[];
   onOpenAdmin?: () => void;
   onNavigateSection?: (sectionId: string) => void;
-  onOpenDocs?: () => void;
   onToggleMatrix?: () => void;
 }
 
@@ -43,7 +42,6 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
   skills,
   onOpenAdmin,
   onNavigateSection,
-  onOpenDocs,
   onToggleMatrix,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -105,7 +103,6 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
               <div><span className="text-[#23a55a] font-mono font-bold">cat skills.json</span> : Print the current skills data</div>
               <div><span className="text-[#23a55a] font-mono font-bold">matrix</span> : Toggle the visual matrix easter egg</div>
               <div><span className="text-[#23a55a] font-mono font-bold">sudo unlock-workspace</span> : Toggle workspace visual mode (admin still requires login)</div>
-              <div><span className="text-[#23a55a] font-mono font-bold">open docs</span> : Return to the documentation landing</div>
               <div><span className="text-[#23a55a] font-mono font-bold">contact</span> : Get direct communication channels</div>
               <div><span className="text-[#23a55a] font-mono font-bold">clear</span> : Clear terminal screen</div>
             </div>
@@ -271,15 +268,6 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
         outputNode = <p className="text-[#23a55a] text-xs">Matrix visual mode toggled.</p>;
         break;
 
-      case 'open':
-        if (arg === 'docs') {
-          onOpenDocs?.();
-          outputNode = <p className="text-[#38bdf8] text-xs">Returning to the documentation landing...</p>;
-        } else {
-          outputNode = <p className="text-red-400 text-xs">Usage: open docs</p>;
-        }
-        break;
-
       case 'contact':
         outputNode = (
           <div className="space-y-1 text-xs text-gray-300 font-mono">
@@ -438,7 +426,7 @@ export const InteractiveTerminal: React.FC<InteractiveTerminalProps> = ({
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="type 'help', 'projects', 'cat skills.json' or 'open docs'..."
+                  placeholder="type 'help', 'projects', 'cat skills.json'..."
                   className="flex-1 bg-transparent text-white outline-none border-none font-mono text-xs placeholder:text-gray-400"
                   autoFocus
                 />

@@ -18,20 +18,17 @@ export const defaultMotionTransition = {
 export const workspaceSectionVariants: Variants = {
   initial: (direction: 1 | -1) => ({
     opacity: 0,
-    x: direction > 0 ? 48 : -48,
-    rotateY: direction > 0 ? -2 : 2,
+    x: direction > 0 ? 16 : -16,
   }),
   enter: {
     opacity: 1,
     x: 0,
-    rotateY: 0,
-    transition: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
   },
   exit: (direction: 1 | -1) => ({
     opacity: 0,
-    x: direction > 0 ? -48 : 48,
-    rotateY: direction > 0 ? 2 : -2,
-    transition: { duration: 0.34, ease: [0.22, 1, 0.36, 1] },
+    x: direction > 0 ? -10 : 10,
+    transition: { duration: 0.18, ease: [0.4, 0, 1, 1] },
   }),
 };
 
